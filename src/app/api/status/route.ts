@@ -1,0 +1,52 @@
+import { NextResponse } from "next/server";
+
+import { cloudinary } from "@/lib/cloudinary";
+import { env, maskSecret } from "@/lib/env";
+import { getDatabase } from "@/lib/mongodb";
+
+export async function GET() {
+  const mongodb = {
+    connected: false,
+    database: env.MONGODB_DB,
+    error: null as string | null,
+  };
+
+  const cloudinaryService = {
+    connected: false,
+    cloudName: env.CLOUDINARY_CLOUD_NAME,
+    apiKey: maskSecret(env.CLOUDINARY_API_KEY),
+    error: null as string | null,
+  };
+
+  try {
+    const db = await getDatabase();
+    await db.command({ ping: 1 });
+    mongodb.connected = true;
+  } catch (error) {
+    mongodb.error = error instanceof Error ? error.message : "Unknown MongoDB setup error";
+  }
+
+  try {
+    const cloudinaryStatus = await cloudinary.api.ping();
+    cloudinaryService.connected = cloudinaryStatus.status === "ok";
+  } catch (error) {
+    cloudinaryService.error = error instanceof Error ? error.message : "Unknown Cloudinary setup error";
+  }
+
+  const allHealthy = mongodb.connected && cloudinaryService.connected;
+  const partiallyHealthy = mongodb.connected || cloudinaryService.connected;
+
+  return NextResponse.json(
+    {
+      status: allHealthy ? "ok" : partiallyHealthy ? "degraded" : "error",
+      checkedAt: new Date().toISOString(),
+      services: {
+        mongodb,
+        cloudinary: cloudinaryService,
+      },
+    },
+    {
+      status: allHealthy ? 200 : partiallyHealthy ? 207 : 500,
+    },
+  );
+}
