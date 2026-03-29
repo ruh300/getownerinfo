@@ -38,6 +38,12 @@ export default function Home() {
             </div>
             <div className="flex flex-wrap gap-3">
               <Link
+                href="/sign-in"
+                className="rounded-full border border-[var(--accent)] px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--accent)] transition hover:bg-[rgba(200,134,10,0.08)]"
+              >
+                Open Workspace
+              </Link>
+              <Link
                 href="/listings/new"
                 className="rounded-full bg-[var(--primary)] px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-[var(--primary-light)]"
               >

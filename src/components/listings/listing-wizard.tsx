@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useDeferredValue, useEffect, useState, useTransition } from "react";
 
+import { type AuthUser } from "@/lib/auth/types";
 import {
   type ListingCategory,
   type ListingMedia,
@@ -118,7 +119,7 @@ function normalizeMedia(media: ListingMedia[]) {
   }));
 }
 
-export function ListingWizard() {
+export function ListingWizard({ signedInUser }: { signedInUser: AuthUser }) {
   const [category, setCategory] = useState<ListingCategory>("real_estate_rent");
   const [ownerType, setOwnerType] = useState<OwnerType>("owner");
   const [fullName, setFullName] = useState("");
@@ -252,6 +253,12 @@ export function ListingWizard() {
     units,
     upiNumber,
   ]);
+
+  useEffect(() => {
+    setFullName((current) => current || signedInUser.fullName);
+    setPhone((current) => current || signedInUser.phone || "");
+    setEmail((current) => current || signedInUser.email || "");
+  }, [signedInUser.email, signedInUser.fullName, signedInUser.phone]);
 
   useEffect(() => {
     if (!isEligibilityReady) {
@@ -476,6 +483,9 @@ export function ListingWizard() {
           <p className="max-w-3xl text-base leading-7 text-[var(--muted)]">
             This draft flow now supports pricing rules, browser autosave, listing image uploads, and an admin-only ownership proof upload.
           </p>
+          <div className="inline-flex rounded-full border border-[rgba(26,77,46,0.14)] bg-[var(--surface-alt)] px-4 py-2 text-sm font-medium text-[var(--primary)]">
+            Signed in as {signedInUser.fullName} ({signedInUser.role})
+          </div>
         </div>
         <div className="rounded-[24px] border border-[rgba(26,77,46,0.14)] bg-[var(--surface)] px-5 py-4 shadow-[0_18px_40px_rgba(0,0,0,0.06)]">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Current recommendation</p>

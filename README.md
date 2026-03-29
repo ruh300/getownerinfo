@@ -48,11 +48,13 @@ The initial build favors:
 
 - MongoDB Atlas credentials are expected in `.env.local`
 - Cloudinary credentials are expected in `.env.local`
+- `AUTH_SESSION_SECRET` enables the protected workspace session cookie in production
 - The repository includes reusable server helpers for both services
 - `GET /api/status` performs a lightweight connectivity check without exposing secrets
 - `GET /api/listings/eligibility` exposes the Model A/B rule engine for the listing wizard
 - `POST /api/uploads/sign` signs direct Cloudinary uploads for listing images and ownership proofs
-- `/listings/new` now includes browser autosave, Cloudinary uploads, and draft submission wiring
+- `/sign-in`, `/dashboard`, and `/admin` now provide a protected workspace using a signed session cookie
+- `/listings/new` now includes browser autosave, Cloudinary uploads, authenticated access control, and draft submission wiring
 
 ## MongoDB Atlas Note
 
@@ -65,6 +67,10 @@ If Cloudinary works but MongoDB does not, check Atlas before changing code:
 ## Useful Local Endpoints
 
 - `/api/status`
+- `/api/auth/session`
 - `/api/listings/eligibility?category=real_estate_rent&units=1&priceRwf=1500000`
 - `/api/uploads/sign`
+- `/sign-in`
+- `/dashboard`
+- `/admin`
 - `/listings/new`
