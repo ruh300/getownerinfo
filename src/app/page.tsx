@@ -38,10 +38,10 @@ export default function Home() {
             </div>
             <div className="flex flex-wrap gap-3">
               <Link
-                href="/sign-in"
+                href="/listings"
                 className="rounded-full border border-[var(--accent)] px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--accent)] transition hover:bg-[rgba(200,134,10,0.08)]"
               >
-                Open Workspace
+                Browse Listings
               </Link>
               <Link
                 href="/listings/new"

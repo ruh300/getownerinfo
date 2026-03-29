@@ -54,7 +54,10 @@ The initial build favors:
 - `GET /api/listings/eligibility` exposes the Model A/B rule engine for the listing wizard
 - `POST /api/uploads/sign` signs direct Cloudinary uploads for listing images and ownership proofs
 - `/sign-in`, `/dashboard`, and `/admin` now provide a protected workspace using a signed session cookie
-- `/listings/new` now includes browser autosave, Cloudinary uploads, authenticated access control, and draft submission wiring
+- `/listings/new` now includes browser autosave, Cloudinary uploads, persistent draft save/update, and draft submission for admin review
+- `/admin` now shows a live review queue with approve/reject actions and audit logging
+- `/listings` and `/listings/[listingId]` now expose the public marketplace and locked-contact detail view for approved listings
+- `POST /api/listings/[listingId]/unlock` now records the prototype token unlock flow for signed-in users
 
 ## MongoDB Atlas Note
 
@@ -68,9 +71,12 @@ If Cloudinary works but MongoDB does not, check Atlas before changing code:
 
 - `/api/status`
 - `/api/auth/session`
+- `/api/listings/[listingId]/unlock`
 - `/api/listings/eligibility?category=real_estate_rent&units=1&priceRwf=1500000`
 - `/api/uploads/sign`
 - `/sign-in`
 - `/dashboard`
 - `/admin`
+- `/listings`
+- `/listings/[listingId]`
 - `/listings/new`

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useDeferredValue, useEffect, useState, useTransition } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
 
 import { type AuthUser } from "@/lib/auth/types";
 import {
@@ -49,9 +49,17 @@ type EligibilityResponse = {
 type DraftResponse = {
   status: "ok";
   draftId: string;
+  created: boolean;
+};
+
+type SubmitDraftResponse = {
+  status: "ok";
+  listingId: string;
+  listingStatus: string;
 };
 
 type WizardSnapshot = {
+  draftId?: string;
   category: ListingCategory;
   ownerType: OwnerType;
   fullName: string;
@@ -150,8 +158,10 @@ export function ListingWizard({ signedInUser }: { signedInUser: AuthUser }) {
   const [localMessage, setLocalMessage] = useState<string | null>(null);
   const [isUploadingImages, setIsUploadingImages] = useState(false);
   const [isUploadingProof, setIsUploadingProof] = useState(false);
+  const [savedDraftId, setSavedDraftId] = useState<string | null>(null);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [isSubmittingDraft, setIsSubmittingDraft] = useState(false);
   const [hasLoadedLocalDraft, setHasLoadedLocalDraft] = useState(false);
-  const [isPending, startTransition] = useTransition();
 
   const deferredCategory = useDeferredValue(category);
   const deferredUnits = useDeferredValue(units);
@@ -172,6 +182,7 @@ export function ListingWizard({ signedInUser }: { signedInUser: AuthUser }) {
 
       const snapshot = JSON.parse(rawSnapshot) as Partial<WizardSnapshot>;
 
+      if (typeof snapshot.draftId === "string" && snapshot.draftId.trim()) setSavedDraftId(snapshot.draftId);
       if (typeof snapshot.category === "string") setCategory(snapshot.category);
       if (typeof snapshot.ownerType === "string") setOwnerType(snapshot.ownerType);
       if (typeof snapshot.fullName === "string") setFullName(snapshot.fullName);
@@ -207,6 +218,7 @@ export function ListingWizard({ signedInUser }: { signedInUser: AuthUser }) {
     }
 
     const snapshot: WizardSnapshot = {
+      draftId: savedDraftId ?? undefined,
       category,
       ownerType,
       fullName,
@@ -247,6 +259,7 @@ export function ListingWizard({ signedInUser }: { signedInUser: AuthUser }) {
     phone,
     priceRwf,
     requestedModel,
+    savedDraftId,
     streetAddress,
     title,
     tokenFeeEnabled,
@@ -405,63 +418,118 @@ export function ListingWizard({ signedInUser }: { signedInUser: AuthUser }) {
     );
   }
 
-  function saveDraft() {
+  function buildDraftPayload() {
+    return {
+      draftId: savedDraftId,
+      ownerType,
+      ownerContact: {
+        fullName,
+        phone,
+        email,
+      },
+      category,
+      title,
+      description,
+      priceRwf: parsedPrice,
+      units: parsedUnits,
+      requestedModel,
+      durationMonths,
+      tokenFeeEnabled,
+      location: {
+        approximateAreaLabel,
+        district,
+        upiNumber,
+        streetAddress,
+        houseNumber,
+      },
+      media,
+      ownershipProof,
+      features,
+    };
+  }
+
+  async function saveDraftToServer(showSuccessMessage = true) {
     setDraftMessage(null);
     setDraftError(null);
+    setIsSavingDraft(true);
 
-    startTransition(() => {
-      void (async () => {
-        try {
-          const response = await fetch("/api/listings/drafts", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              ownerType,
-              ownerContact: {
-                fullName,
-                phone,
-                email,
-              },
-              category,
-              title,
-              description,
-              priceRwf: parsedPrice,
-              units: parsedUnits,
-              requestedModel,
-              durationMonths,
-              tokenFeeEnabled,
-              location: {
-                approximateAreaLabel,
-                district,
-                upiNumber,
-                streetAddress,
-                houseNumber,
-              },
-              media,
-              ownershipProof,
-              features,
-            }),
-          });
+    try {
+      const response = await fetch("/api/listings/drafts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(buildDraftPayload()),
+      });
 
-          const payload = (await response.json()) as DraftResponse & { message?: string; errors?: string[] };
+      const payload = (await response.json()) as DraftResponse & { message?: string; errors?: string[] };
 
-          if (!response.ok) {
-            const errorMessage = payload.errors?.join(" ") || payload.message || "Draft save failed.";
-            throw new Error(errorMessage);
-          }
+      if (!response.ok) {
+        const errorMessage = payload.errors?.join(" ") || payload.message || "Draft save failed.";
+        throw new Error(errorMessage);
+      }
 
-          setDraftMessage(`Draft saved successfully. Draft ID: ${payload.draftId}`);
-        } catch (error) {
-          setDraftError(error instanceof Error ? error.message : "Draft save failed.");
-        }
-      })();
-    });
+      setSavedDraftId(payload.draftId);
+
+      if (showSuccessMessage) {
+        setDraftMessage(
+          payload.created
+            ? `Draft saved successfully. Draft ID: ${payload.draftId}`
+            : `Draft updated successfully. Draft ID: ${payload.draftId}`,
+        );
+      }
+
+      return payload.draftId;
+    } catch (error) {
+      setDraftError(error instanceof Error ? error.message : "Draft save failed.");
+      return null;
+    } finally {
+      setIsSavingDraft(false);
+    }
+  }
+
+  function saveDraft() {
+    void saveDraftToServer(true);
+  }
+
+  async function submitForReview() {
+    if (!isFormReady()) {
+      setDraftError("Finish the required listing details before submitting for review.");
+      return;
+    }
+
+    setDraftMessage(null);
+    setDraftError(null);
+    setIsSubmittingDraft(true);
+
+    try {
+      const draftId = savedDraftId ?? (await saveDraftToServer(false));
+
+      if (!draftId) {
+        throw new Error("Save the draft successfully before submitting it for review.");
+      }
+
+      const response = await fetch(`/api/listings/drafts/${draftId}/submit`, {
+        method: "POST",
+      });
+      const payload = (await response.json()) as SubmitDraftResponse & { message?: string };
+
+      if (!response.ok) {
+        throw new Error(payload.message ?? "Draft submission failed.");
+      }
+
+      setDraftMessage(`Draft submitted for admin review. Listing ID: ${payload.listingId}`);
+      setLocalMessage("The draft is now linked to a pending review listing. You can still keep refining and resubmitting it if needed.");
+    } catch (error) {
+      setDraftError(error instanceof Error ? error.message : "Draft submission failed.");
+    } finally {
+      setIsSubmittingDraft(false);
+    }
   }
 
   const summaryModel = eligibility?.selectedModel ?? "B";
   const selectedCategoryLabel = categoryOptions.find((option) => option.value === category)?.label ?? category;
+  const isBusy = isSavingDraft || isSubmittingDraft;
   const completenessItems = [
     { label: "Owner details", done: fullName.trim().length > 1 && phone.trim().length > 5 },
     { label: "Location", done: approximateAreaLabel.trim().length > 1 },
@@ -671,8 +739,12 @@ export function ListingWizard({ signedInUser }: { signedInUser: AuthUser }) {
                   ))}
                 </ul>
               </div>
-              <button type="button" disabled={!isFormReady() || isPending} onClick={saveDraft} className={`w-full rounded-2xl px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-white transition ${!isFormReady() || isPending ? "cursor-not-allowed bg-[rgba(26,77,46,0.45)]" : "bg-[var(--primary)] hover:bg-[var(--primary-light)]"}`}>{isPending ? "Saving draft..." : "Save draft"}</button>
-              <p className="text-xs leading-5 text-[var(--muted)]">Browser autosave is active. Server draft save needs MongoDB Atlas access to be fully available.</p>
+              <div className="rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-xs leading-5 text-[var(--muted)]">
+                {savedDraftId ? `Server draft linked: ${savedDraftId}` : "No server draft linked yet. Save once to create the persistent draft record."}
+              </div>
+              <button type="button" disabled={!isFormReady() || isBusy} onClick={saveDraft} className={`w-full rounded-2xl px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-white transition ${!isFormReady() || isBusy ? "cursor-not-allowed bg-[rgba(26,77,46,0.45)]" : "bg-[var(--primary)] hover:bg-[var(--primary-light)]"}`}>{isSavingDraft ? "Saving draft..." : "Save draft"}</button>
+              <button type="button" disabled={!isFormReady() || isBusy} onClick={() => { void submitForReview(); }} className={`w-full rounded-2xl px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-white transition ${!isFormReady() || isBusy ? "cursor-not-allowed bg-[rgba(200,134,10,0.45)]" : "bg-[var(--accent)] hover:bg-[#a06b08]"}`}>{isSubmittingDraft ? "Submitting for review..." : "Submit for review"}</button>
+              <p className="text-xs leading-5 text-[var(--muted)]">Browser autosave is active. Persistent save and admin submission now use the same server-side draft record.</p>
               {draftMessage ? <div className="rounded-2xl border border-[rgba(26,122,74,0.24)] bg-[rgba(26,122,74,0.08)] px-4 py-3 text-sm text-[var(--primary)]">{draftMessage}</div> : null}
               {draftError ? <div className="rounded-2xl border border-[rgba(184,50,50,0.2)] bg-[rgba(184,50,50,0.08)] px-4 py-3 text-sm text-[#9c2d2d]">{draftError}</div> : null}
             </div>

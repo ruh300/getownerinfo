@@ -108,10 +108,12 @@ export type UserDocument = BaseDocument & {
   isPhoneVerified: boolean;
   isEmailVerified: boolean;
   status: "active" | "pending" | "suspended";
+  lastLoginAt?: Date;
 };
 
 export type ListingDocument = BaseDocument & {
   ownerUserId: ObjectId;
+  ownerContact: DraftOwnerContact;
   ownerType: OwnerType;
   category: ListingCategory;
   title: string;
@@ -129,9 +131,16 @@ export type ListingDocument = BaseDocument & {
   features: string[];
   eligibility: ListingEligibilitySnapshot;
   verificationStatus: VerificationStatus;
+  submittedAt: Date;
+  reviewedAt?: Date;
+  reviewedByUserId?: ObjectId;
+  reviewNote?: string;
+  activatedAt?: Date;
+  rejectedAt?: Date;
 };
 
 export type ListingDraftDocument = BaseDocument & {
+  ownerUserId: ObjectId;
   status: "draft";
   ownerType: OwnerType;
   ownerContact: DraftOwnerContact;
@@ -148,6 +157,8 @@ export type ListingDraftDocument = BaseDocument & {
   ownershipProof?: OwnershipProofAsset;
   features: string[];
   eligibility: ListingEligibilitySnapshot;
+  submittedListingId?: ObjectId;
+  submittedAt?: Date;
 };
 
 export type PaymentDocument = BaseDocument & {

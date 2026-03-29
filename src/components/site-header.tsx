@@ -23,6 +23,9 @@ export function SiteHeader({ session }: { session: AuthSession | null }) {
           <Link href="/" className="rounded-full px-3 py-2 transition hover:bg-[var(--surface-alt)] hover:text-[var(--foreground)]">
             Home
           </Link>
+          <Link href="/listings" className="rounded-full px-3 py-2 transition hover:bg-[var(--surface-alt)] hover:text-[var(--foreground)]">
+            Listings
+          </Link>
           {session ? (
             <>
               <Link href="/dashboard" className="rounded-full px-3 py-2 transition hover:bg-[var(--surface-alt)] hover:text-[var(--foreground)]">

@@ -35,7 +35,10 @@ type ListingDraftInput = {
 type ValidationResult =
   | {
       ok: true;
-      value: Omit<ListingDraftDocument, "_id" | "createdAt" | "updatedAt">;
+      value: Omit<
+        ListingDraftDocument,
+        "_id" | "createdAt" | "updatedAt" | "ownerUserId" | "submittedAt" | "submittedListingId"
+      >;
     }
   | {
       ok: false;
