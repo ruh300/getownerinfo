@@ -1,15 +1,25 @@
 import { v2 as cloudinary } from "cloudinary";
 
-import { env } from "@/lib/env";
+import { getServerEnv } from "@/lib/env";
 
-cloudinary.config({
-  cloud_name: env.CLOUDINARY_CLOUD_NAME,
-  api_key: env.CLOUDINARY_API_KEY,
-  api_secret: env.CLOUDINARY_API_SECRET,
-  secure: true,
-});
+let cloudinaryConfigured = false;
 
-export { cloudinary };
+export function getCloudinary() {
+  if (!cloudinaryConfigured) {
+    const env = getServerEnv();
+
+    cloudinary.config({
+      cloud_name: env.CLOUDINARY_CLOUD_NAME,
+      api_key: env.CLOUDINARY_API_KEY,
+      api_secret: env.CLOUDINARY_API_SECRET,
+      secure: true,
+    });
+
+    cloudinaryConfigured = true;
+  }
+
+  return cloudinary;
+}
 
 export const cloudinaryFolders = {
   listingImages: "getownerinfo/listing-images",
@@ -56,6 +66,8 @@ function slugifyFilename(filename: string) {
 }
 
 export function createSignedUploadParams(assetKind: UploadAssetKind, originalFilename: string) {
+  const env = getServerEnv();
+  const cloudinaryClient = getCloudinary();
   const config = getCloudinaryUploadConfig(assetKind);
   const timestamp = Math.floor(Date.now() / 1000);
   const safeName = slugifyFilename(originalFilename) || assetKind;
@@ -73,7 +85,7 @@ export function createSignedUploadParams(assetKind: UploadAssetKind, originalFil
     use_filename: "false",
   };
 
-  const signature = cloudinary.utils.api_sign_request(paramsToSign, env.CLOUDINARY_API_SECRET);
+  const signature = cloudinaryClient.utils.api_sign_request(paramsToSign, env.CLOUDINARY_API_SECRET);
 
   return {
     apiKey: env.CLOUDINARY_API_KEY,

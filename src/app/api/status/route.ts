@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 
-import { cloudinary } from "@/lib/cloudinary";
-import { env, maskSecret } from "@/lib/env";
+import { getCloudinary } from "@/lib/cloudinary";
+import { getServerEnv, maskSecret } from "@/lib/env";
 import { getDatabase } from "@/lib/mongodb";
 
 export async function GET() {
+  const env = getServerEnv();
   const mongodb = {
     connected: false,
     database: env.MONGODB_DB,
@@ -27,7 +28,7 @@ export async function GET() {
   }
 
   try {
-    const cloudinaryStatus = await cloudinary.api.ping();
+    const cloudinaryStatus = await getCloudinary().api.ping();
     cloudinaryService.connected = cloudinaryStatus.status === "ok";
   } catch (error) {
     cloudinaryService.error = error instanceof Error ? error.message : "Unknown Cloudinary setup error";

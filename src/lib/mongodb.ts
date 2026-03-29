@@ -1,40 +1,44 @@
 import { MongoClient, type Db } from "mongodb";
 
-import { env } from "@/lib/env";
-
-const uri = env.MONGODB_URI;
-const dbName = env.MONGODB_DB;
+import { getServerEnv } from "@/lib/env";
 
 declare global {
   var mongoClientPromise: Promise<MongoClient> | undefined;
 }
 
-function createMongoClient() {
+let mongoClientPromise: Promise<MongoClient> | undefined;
+
+function createMongoClient(uri: string) {
   return new MongoClient(uri, {
     appName: "getownerinfo-web",
     maxPoolSize: 10,
   });
 }
 
-const clientPromise =
-  global.mongoClientPromise ??
-  createMongoClient().connect().then((client) => {
-    if (process.env.NODE_ENV !== "production") {
-      global.mongoClientPromise = Promise.resolve(client);
+function getMongoClientPromise() {
+  if (process.env.NODE_ENV === "production") {
+    if (!mongoClientPromise) {
+      const { MONGODB_URI } = getServerEnv();
+      mongoClientPromise = createMongoClient(MONGODB_URI).connect();
     }
 
-    return client;
-  });
+    return mongoClientPromise;
+  }
 
-if (process.env.NODE_ENV !== "production" && !global.mongoClientPromise) {
-  global.mongoClientPromise = clientPromise;
+  if (!global.mongoClientPromise) {
+    const { MONGODB_URI } = getServerEnv();
+    global.mongoClientPromise = createMongoClient(MONGODB_URI).connect();
+  }
+
+  return global.mongoClientPromise;
 }
 
 export async function getMongoClient() {
-  return clientPromise;
+  return getMongoClientPromise();
 }
 
 export async function getDatabase(): Promise<Db> {
+  const { MONGODB_DB } = getServerEnv();
   const client = await getMongoClient();
-  return client.db(dbName);
+  return client.db(MONGODB_DB);
 }
