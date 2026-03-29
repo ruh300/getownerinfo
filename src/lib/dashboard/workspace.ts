@@ -4,13 +4,21 @@ import type { AuthSession } from "@/lib/auth/types";
 import { ensureUserRecord } from "@/lib/auth/user-record";
 import { getCollection } from "@/lib/data/collections";
 import type { ListingDocument, PaymentDocument } from "@/lib/domain";
+import { getFeeSettingsSummary, resolveListingTokenFeeRwf } from "@/lib/fee-settings/workflow";
+import { isListingPubliclyVisible } from "@/lib/listings/lifecycle";
 import { getPublicListings, type PublicListingSummary } from "@/lib/listings/public";
+import {
+  getSeekerMatchConversationFeedForUser,
+  type SeekerMatchConversationSummary,
+} from "@/lib/seeker-requests/messaging";
+import { getBuyerSeekerResponsesForUser, type SeekerResponseSummary } from "@/lib/seeker-requests/responses";
 import { getBuyerSeekerRequestsForUser, type BuyerSeekerRequestSummary } from "@/lib/seeker-requests/workflow";
 
 export type BuyerUnlockSummary = {
   listingId: string;
   title: string;
   category: ListingDocument["category"];
+  status: ListingDocument["status"];
   priceRwf: number;
   approximateAreaLabel: string;
   unlockedAt: string;
@@ -18,6 +26,7 @@ export type BuyerUnlockSummary = {
   ownerName: string;
   ownerPhone: string;
   stillActive: boolean;
+  canViewPublicDetail: boolean;
 };
 
 export type BuyerPaymentSummary = {
@@ -43,6 +52,8 @@ export type BuyerWorkspaceData = {
   recentPayments: BuyerPaymentSummary[];
   recommendedListings: PublicListingSummary[];
   seekerRequests: BuyerSeekerRequestSummary[];
+  recentSeekerResponses: SeekerResponseSummary[];
+  matchedSeekerConversations: SeekerMatchConversationSummary[];
 };
 
 function serializePayment(payment: WithId<PaymentDocument>): BuyerPaymentSummary {
@@ -63,6 +74,7 @@ export async function getBuyerWorkspaceData(session: AuthSession): Promise<Buyer
   const listings = await getCollection("listings");
   const payments = await getCollection("payments");
   const seekerRequests = await getCollection("seekerRequests");
+  const feeSettings = await getFeeSettingsSummary();
   const unlockRecords = await tokenUnlocks
     .find({
       userId: user._id,
@@ -114,8 +126,11 @@ export async function getBuyerWorkspaceData(session: AuthSession): Promise<Buyer
     totalSpentRwf: 0,
     paymentCount: 0,
   };
-  const [buyerSeekerRequests, seekerRequestCount, activeSeekerRequestCount] = await Promise.all([
+  const [buyerSeekerRequests, recentSeekerResponses, matchedSeekerConversations, seekerRequestCount, activeSeekerRequestCount] =
+    await Promise.all([
     getBuyerSeekerRequestsForUser(user._id),
+    getBuyerSeekerResponsesForUser(user._id),
+    getSeekerMatchConversationFeedForUser(user._id),
     seekerRequests.countDocuments({
       requesterUserId: user._id,
     }),
@@ -124,7 +139,7 @@ export async function getBuyerWorkspaceData(session: AuthSession): Promise<Buyer
       status: "active",
       expiresAt: { $gt: new Date() },
     }),
-  ]);
+    ]);
 
   const unlockedListingSummaries = unlockRecords
     .map((unlock) => {
@@ -140,13 +155,18 @@ export async function getBuyerWorkspaceData(session: AuthSession): Promise<Buyer
         listingId: listing._id.toString(),
         title: listing.title,
         category: listing.category,
+        status: listing.status,
         priceRwf: listing.priceRwf,
         approximateAreaLabel: listing.location.approximateAreaLabel,
         unlockedAt: unlock.unlockedAt.toISOString(),
-        amountPaidRwf: payment?.amountRwf ?? listing.tokenFeeRwf ?? 10_000,
+        amountPaidRwf:
+          payment?.amountRwf ??
+          listing.tokenFeeRwf ??
+          resolveListingTokenFeeRwf(feeSettings, listing.category, listing.model),
         ownerName: listing.ownerContact.fullName,
         ownerPhone: listing.ownerContact.phone,
         stillActive: listing.status === "active" && listing.verificationStatus === "approved",
+        canViewPublicDetail: isListingPubliclyVisible(listing.status) && listing.verificationStatus === "approved",
       } satisfies BuyerUnlockSummary;
     })
     .filter((listing): listing is BuyerUnlockSummary => listing !== null);
@@ -166,5 +186,7 @@ export async function getBuyerWorkspaceData(session: AuthSession): Promise<Buyer
     recentPayments: recentPayments.map(serializePayment),
     recommendedListings,
     seekerRequests: buyerSeekerRequests,
+    recentSeekerResponses,
+    matchedSeekerConversations,
   };
 }

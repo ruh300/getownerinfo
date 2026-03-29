@@ -4,9 +4,9 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { listingCategories, seekerRequestDurations, type ListingCategory, type SeekerRequestDurationDays } from "@/lib/domain";
+import type { FeeSettingsSummary } from "@/lib/fee-settings/workflow";
 import { formatRwf } from "@/lib/formatting/currency";
 import { getCategoryLabel } from "@/lib/formatting/text";
-import { getSeekerPostFeeRwf, seekerViewTokenFeeRwf } from "@/lib/seeker-requests/pricing";
 
 type CreateSeekerRequestResponse = {
   status: "ok" | "error";
@@ -15,7 +15,7 @@ type CreateSeekerRequestResponse = {
   requestId?: string;
 };
 
-export function SeekerRequestForm() {
+export function SeekerRequestForm({ feeSettings }: { feeSettings: FeeSettingsSummary }) {
   const router = useRouter();
   const [category, setCategory] = useState<ListingCategory>("real_estate_rent");
   const [title, setTitle] = useState("");
@@ -31,7 +31,7 @@ export function SeekerRequestForm() {
   const [error, setError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [isPending, startTransition] = useTransition();
-  const postFeeRwf = getSeekerPostFeeRwf(durationDays);
+  const postFeeRwf = feeSettings.seekerPostFeeByDuration[String(durationDays) as keyof FeeSettingsSummary["seekerPostFeeByDuration"]];
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -208,7 +208,7 @@ export function SeekerRequestForm() {
       <div className="rounded-[24px] border border-[rgba(26,77,46,0.12)] bg-[rgba(26,77,46,0.06)] p-5 text-sm leading-6 text-[var(--muted)]">
         <p className="font-semibold text-[var(--foreground)]">Prototype seeker pricing</p>
         <p className="mt-2">Posting fee for this request: {formatRwf(postFeeRwf)}</p>
-        <p>Future owner view token: {formatRwf(seekerViewTokenFeeRwf)}</p>
+        <p>Future owner view token: {formatRwf(feeSettings.seekerViewTokenFeeRwf)}</p>
         <p className="mt-2">
           Your request stays public but anonymized. Owners can see what you need, but your name and phone stay hidden.
         </p>

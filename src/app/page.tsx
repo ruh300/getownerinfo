@@ -9,9 +9,9 @@ const stackItems = [
 
 const nextSteps = [
   "Wire real AfrIPay orchestration for listing, token, and seeker fees.",
-  "Expand seeker requests into owner unlock and match-notification flows.",
-  "Add penalties, notifications, and richer admin reporting.",
-  "Harden production auth, moderation, and deployment settings.",
+  "Complete listing lifecycle states like sold, rented, expired, and not concluded.",
+  "Expand post-unlock messaging and seeker fulfillment workflows.",
+  "Harden production auth, moderation, rate limits, and deployment settings.",
 ];
 
 export default function Home() {
@@ -32,8 +32,8 @@ export default function Home() {
               </h1>
               <p className="max-w-2xl text-base leading-7 text-[var(--muted)] md:text-lg">
                 This repository is now prepared as the app root for a Vercel-friendly MVP using MongoDB Atlas
-                and Cloudinary. The next implementation steps are focused on listings, admin approval, and
-                secure contact unlocks.
+                and Cloudinary. The current build already includes admin review, payment records, audit feeds,
+                and notification centers across the protected workspace.
               </p>
             </div>
             <div className="flex flex-wrap gap-3">

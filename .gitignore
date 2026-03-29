@@ -4,6 +4,7 @@ node_modules/
 dist/
 coverage/
 *.log
+*.tsbuildinfo
 .env
 .env.local
 .env.development.local
@@ -13,4 +14,3 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-

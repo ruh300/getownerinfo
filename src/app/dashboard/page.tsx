@@ -1,5 +1,10 @@
 import Link from "next/link";
 
+import { OwnerConversationInbox } from "@/components/chat/owner-conversation-inbox";
+import { ListingStatusManager } from "@/components/listings/listing-status-manager";
+import { NotificationCenter } from "@/components/notifications/notification-center";
+import { SeekerMatchConversationList } from "@/components/seeker-requests/seeker-match-conversation-list";
+import { SeekerResponseList } from "@/components/seeker-requests/seeker-response-list";
 import { requireSession } from "@/lib/auth/session";
 import { canAccessAdmin, canCreateListings } from "@/lib/auth/types";
 import { getBuyerWorkspaceData } from "@/lib/dashboard/workspace";
@@ -7,13 +12,16 @@ import { formatRwf } from "@/lib/formatting/currency";
 import { formatDate, formatDateTime } from "@/lib/formatting/date";
 import { getCategoryLabel, humanizeEnum } from "@/lib/formatting/text";
 import { getOwnerWorkspaceData } from "@/lib/listings/workflow";
+import { getNotificationCenterForSession } from "@/lib/notifications/workflow";
 
 export default async function DashboardPage() {
   const session = await requireSession();
   const showOwnerWorkspace = canCreateListings(session.user.role);
   let ownerWorkspace: Awaited<ReturnType<typeof getOwnerWorkspaceData>> | null = null;
   let buyerWorkspace: Awaited<ReturnType<typeof getBuyerWorkspaceData>> | null = null;
+  let notificationCenter: Awaited<ReturnType<typeof getNotificationCenterForSession>> | null = null;
   let workspaceError: string | null = null;
+  let notificationError: string | null = null;
 
   if (showOwnerWorkspace) {
     try {
@@ -27,6 +35,12 @@ export default async function DashboardPage() {
     } catch (error) {
       workspaceError = error instanceof Error ? error.message : "Could not load your buyer workspace.";
     }
+  }
+
+  try {
+    notificationCenter = await getNotificationCenterForSession(session);
+  } catch (error) {
+    notificationError = error instanceof Error ? error.message : "Could not load notifications.";
   }
 
   return (
@@ -134,6 +148,21 @@ export default async function DashboardPage() {
         <section className="rounded-[24px] border border-[rgba(184,50,50,0.2)] bg-[rgba(184,50,50,0.08)] px-5 py-4 text-sm leading-6 text-[#9c2d2d]">
           Could not load live workspace data: {workspaceError}
         </section>
+      ) : null}
+
+      {notificationError ? (
+        <section className="rounded-[24px] border border-[rgba(184,50,50,0.2)] bg-[rgba(184,50,50,0.08)] px-5 py-4 text-sm leading-6 text-[#9c2d2d]">
+          Could not load notifications: {notificationError}
+        </section>
+      ) : null}
+
+      {notificationCenter ? (
+        <NotificationCenter
+          center={notificationCenter}
+          eyebrow="Alerts"
+          title="Notification center"
+          emptyMessage="You have no notifications yet. Listing reviews, unlocks, seeker actions, and buyer inquiries will appear here."
+        />
       ) : null}
 
       {ownerWorkspace ? (
@@ -256,6 +285,9 @@ export default async function DashboardPage() {
                       <p className="font-semibold text-[var(--foreground)]">Review note</p>
                       <p>{listing.reviewNote ?? "No admin note yet."}</p>
                     </div>
+                    {listing.lifecycleActionCount > 0 ? (
+                      <ListingStatusManager listingId={listing.id} currentStatus={listing.status} />
+                    ) : null}
                     <p className="mt-4 text-sm leading-6 text-[var(--muted)]">
                       Submitted {formatDateTime(listing.submittedAt)}
                     </p>
@@ -279,45 +311,15 @@ export default async function DashboardPage() {
               </Link>
             </div>
 
-            {ownerWorkspace.inquiries.length === 0 ? (
-              <div className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 text-sm leading-6 text-[var(--muted)] shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
-                No buyer inquiries yet. When buyers ask clean pre-unlock questions from a listing page, they will appear here.
-              </div>
-            ) : (
-              <div className="grid gap-4 xl:grid-cols-2">
-                {ownerWorkspace.inquiries.map((inquiry) => (
-                  <article
-                    key={inquiry.id}
-                    className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_12px_32px_rgba(0,0,0,0.06)]"
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">
-                          {getCategoryLabel(inquiry.listingCategory)}
-                        </p>
-                        <h3 className="mt-2 font-[var(--font-display)] text-2xl">{inquiry.listingTitle}</h3>
-                      </div>
-                      <Link
-                        href={`/listings/${inquiry.listingId}`}
-                        className="rounded-full border border-[var(--border)] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--foreground)] transition hover:bg-[var(--surface-alt)]"
-                      >
-                        Open listing
-                      </Link>
-                    </div>
-                    <div className="mt-4 rounded-2xl bg-[var(--surface-alt)] px-4 py-3 text-sm leading-6 text-[var(--muted)]">
-                      <p className="font-semibold text-[var(--foreground)]">Buyer</p>
-                      <p>{inquiry.buyerName}</p>
-                    </div>
-                    <p className="mt-4 text-sm leading-6 text-[var(--foreground)]">{inquiry.body}</p>
-                    <p className="mt-4 text-sm leading-6 text-[var(--muted)]">
-                      Received{" "}
-                      {formatDateTime(inquiry.createdAt)}
-                    </p>
-                  </article>
-                ))}
-              </div>
-            )}
+            <OwnerConversationInbox threads={ownerWorkspace.inquiries} />
           </section>
+
+          <SeekerMatchConversationList
+            conversations={ownerWorkspace.matchedSeekerConversations}
+            eyebrow="Matched seeker follow-up"
+            title="Seeker conversations after a match"
+            emptyMessage="When a seeker selects your response, the matched follow-up conversation will appear here."
+          />
         </>
       ) : null}
 
@@ -394,16 +396,22 @@ export default async function DashboardPage() {
                       <div className="rounded-[20px] border border-[var(--border)] bg-[var(--surface-alt)] px-4 py-3 text-sm leading-6 text-[var(--foreground)]">
                         <p>{formatRwf(listing.priceRwf)}</p>
                         <p>{formatRwf(listing.amountPaidRwf)} paid</p>
-                        <p>{listing.stillActive ? "Still active" : "No longer active"}</p>
+                        <p>{humanizeEnum(listing.status)}</p>
                       </div>
                     </div>
                     <div className="mt-4 flex flex-wrap gap-3">
-                      <Link
-                        href={`/listings/${listing.listingId}`}
-                        className="rounded-full border border-[var(--primary)] px-4 py-2 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--primary)] transition hover:bg-[var(--surface-alt)]"
-                      >
-                        Reopen listing
-                      </Link>
+                      {listing.canViewPublicDetail ? (
+                        <Link
+                          href={`/listings/${listing.listingId}`}
+                          className="rounded-full border border-[var(--primary)] px-4 py-2 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--primary)] transition hover:bg-[var(--surface-alt)]"
+                        >
+                          Reopen listing
+                        </Link>
+                      ) : (
+                        <span className="rounded-full border border-[var(--border)] px-4 py-2 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                          No longer public
+                        </span>
+                      )}
                     </div>
                     <p className="mt-4 text-sm leading-6 text-[var(--muted)]">
                       Unlocked {formatDateTime(listing.unlockedAt)}
@@ -519,7 +527,7 @@ export default async function DashboardPage() {
                         <h3 className="mt-2 font-[var(--font-display)] text-2xl">{request.title}</h3>
                       </div>
                       <div className="rounded-full border border-[var(--border)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                        {request.status}
+                        {humanizeEnum(request.status)}
                       </div>
                     </div>
                     <div className="mt-4 rounded-2xl bg-[var(--surface-alt)] px-4 py-3 text-sm leading-6 text-[var(--muted)]">
@@ -535,16 +543,29 @@ export default async function DashboardPage() {
                     <div className="mt-4 flex flex-wrap gap-3 text-sm leading-6 text-[var(--muted)]">
                       <span>{formatRwf(request.postedFeeRwf)} posted</span>
                       <span>{request.durationDays} day window</span>
+                      <span>{request.responseCount} response{request.responseCount === 1 ? "" : "s"}</span>
                     </div>
+                    {request.matchedResponderName ? (
+                      <p className="mt-4 text-sm leading-6 text-[var(--muted)]">
+                        Matched owner: {request.matchedResponderName}
+                      </p>
+                    ) : null}
+                    {request.closureNote ? (
+                      <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Note: {request.closureNote}</p>
+                    ) : null}
                     <p className="mt-4 text-sm leading-6 text-[var(--muted)]">
-                      Expires {formatDate(request.expiresAt)}
+                      {request.status === "fulfilled" && request.fulfilledAt
+                        ? `Fulfilled ${formatDate(request.fulfilledAt)}`
+                        : request.status === "closed" && request.closedAt
+                          ? `Closed ${formatDate(request.closedAt)}`
+                          : `Expires ${formatDate(request.expiresAt)}`}
                     </p>
                     <div className="mt-4 flex flex-wrap gap-3">
                       <Link
                         href={`/seeker-requests/${request.id}`}
                         className="rounded-full border border-[var(--primary)] px-4 py-2 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--primary)] transition hover:bg-[var(--surface-alt)]"
                       >
-                        View public request
+                        Open request
                       </Link>
                     </div>
                   </article>
@@ -552,6 +573,21 @@ export default async function DashboardPage() {
               </div>
             )}
           </section>
+
+          <SeekerMatchConversationList
+            conversations={buyerWorkspace.matchedSeekerConversations}
+            eyebrow="Matched follow-up"
+            title="Conversations after a match"
+            emptyMessage="Once you select an owner response, the matched follow-up thread will stay visible here."
+          />
+
+          <SeekerResponseList
+            responses={buyerWorkspace.recentSeekerResponses}
+            eyebrow="Owner replies"
+            title="Recent seeker responses"
+            emptyMessage="No owner responses yet. Once unlocked owners answer your seeker requests, they will appear here."
+            showRequestLink
+          />
         </>
       ) : null}
     </main>

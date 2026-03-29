@@ -1,6 +1,7 @@
 import { ObjectId, type WithId } from "mongodb";
 
 import type { AuthSession } from "@/lib/auth/types";
+import { adminRoles } from "@/lib/auth/types";
 import { ensureUserRecord } from "@/lib/auth/user-record";
 import { getOwnerInquiryFeedForUser, type OwnerInquirySummary } from "@/lib/chat/workflow";
 import { getCollection } from "@/lib/data/collections";
@@ -9,10 +10,19 @@ import type {
   ListingDocument,
   ListingDraftDocument,
   ListingModel,
+  ListingStatus,
   UserDocument,
   UserRole,
 } from "@/lib/domain";
+import { getFeeSettingsSummary, resolveListingTokenFeeRwf } from "@/lib/fee-settings/workflow";
+import { humanizeEnum } from "@/lib/formatting/text";
 import { validateListingDraftInput } from "@/lib/listings/drafts";
+import { canManageListingLifecycle, getAllowedNextListingStatuses, isListingPubliclyVisible } from "@/lib/listings/lifecycle";
+import { createNotification, notifyUsersByIds, notifyUsersByRoles } from "@/lib/notifications/workflow";
+import {
+  getSeekerMatchConversationFeedForUser,
+  type SeekerMatchConversationSummary,
+} from "@/lib/seeker-requests/messaging";
 
 export type OwnerDraftSummary = {
   id: string;
@@ -41,6 +51,7 @@ export type OwnerListingSummary = {
   updatedAt: string;
   submittedAt: string;
   reviewNote: string | null;
+  lifecycleActionCount: number;
 };
 
 export type OwnerWorkspaceData = {
@@ -53,6 +64,7 @@ export type OwnerWorkspaceData = {
   drafts: OwnerDraftSummary[];
   listings: OwnerListingSummary[];
   inquiries: OwnerInquirySummary[];
+  matchedSeekerConversations: SeekerMatchConversationSummary[];
 };
 
 export type AdminReviewSummary = {
@@ -105,8 +117,6 @@ export type AdminWorkspaceData = {
   recentActivity: AdminAuditSummary[];
 };
 
-const defaultListingTokenFeeRwf = 10_000;
-
 function parseObjectId(value: string) {
   if (!ObjectId.isValid(value)) {
     throw new Error("Invalid identifier.");
@@ -149,6 +159,7 @@ function serializeListing(listing: WithId<ListingDocument>): OwnerListingSummary
     updatedAt: listing.updatedAt.toISOString(),
     submittedAt: listing.submittedAt.toISOString(),
     reviewNote: listing.reviewNote ?? null,
+    lifecycleActionCount: getAllowedNextListingStatuses(listing.status).length,
   };
 }
 
@@ -301,6 +312,9 @@ export async function submitDraftForReview(session: AuthSession, draftId: string
     throw new Error("The selected draft could not be found.");
   }
 
+  const listingModel = selectListingModel(draft);
+  const feeSettings = draft.tokenFeeEnabled ? await getFeeSettingsSummary() : null;
+
   const listingPayload: Omit<ListingDocument, "_id"> = {
     ownerUserId: user._id,
     ownerContact: draft.ownerContact,
@@ -310,10 +324,13 @@ export async function submitDraftForReview(session: AuthSession, draftId: string
     description: draft.description,
     priceRwf: draft.priceRwf,
     units: draft.units,
-    model: selectListingModel(draft),
+    model: listingModel,
     status: "pending_approval",
     tokenFeeEnabled: draft.tokenFeeEnabled,
-    tokenFeeRwf: draft.tokenFeeEnabled ? defaultListingTokenFeeRwf : undefined,
+    tokenFeeRwf:
+      draft.tokenFeeEnabled && feeSettings
+        ? resolveListingTokenFeeRwf(feeSettings, draft.category, listingModel)
+        : undefined,
     durationMonths: draft.durationMonths,
     location: draft.location,
     media: draft.media,
@@ -386,6 +403,16 @@ export async function submitDraftForReview(session: AuthSession, draftId: string
     updatedAt: now,
   });
 
+  await notifyUsersByRoles(adminRoles, {
+    kind: "listing_submitted_for_review",
+    severity: "info",
+    title: "New listing submitted for review",
+    body: `${draft.title} is waiting in the admin queue.`,
+    entityType: "listing",
+    entityId: listingId.toString(),
+    link: "/admin",
+  });
+
   return {
     listingId: listingId.toString(),
     status: listingPayload.status,
@@ -396,7 +423,7 @@ export async function getOwnerWorkspaceData(session: AuthSession): Promise<Owner
   const user = await ensureUserRecord(session);
   const listingDrafts = await getCollection("listingDrafts");
   const listings = await getCollection("listings");
-  const [drafts, ownedListings, inquiries] = await Promise.all([
+  const [drafts, ownedListings, inquiries, matchedSeekerConversations] = await Promise.all([
     listingDrafts
       .find({
         ownerUserId: user._id,
@@ -412,6 +439,7 @@ export async function getOwnerWorkspaceData(session: AuthSession): Promise<Owner
       .limit(8)
       .toArray(),
     getOwnerInquiryFeedForUser(user._id),
+    getSeekerMatchConversationFeedForUser(user._id),
   ]);
 
   return {
@@ -424,6 +452,7 @@ export async function getOwnerWorkspaceData(session: AuthSession): Promise<Owner
     drafts: drafts.map(serializeDraft),
     listings: ownedListings.map(serializeListing),
     inquiries,
+    matchedSeekerConversations,
   };
 }
 
@@ -534,9 +563,130 @@ export async function applyListingReviewDecision(
     updatedAt: now,
   });
 
+  await createNotification({
+    userId: listing.ownerUserId,
+    kind: decision === "approve" ? "listing_approved" : "listing_rejected",
+    severity: decision === "approve" ? "success" : "warning",
+    title: decision === "approve" ? "Listing approved" : "Listing needs revision",
+    body:
+      decision === "approve"
+        ? `${listing.title} is now live in the marketplace.`
+        : `${listing.title} was sent back for revision.${trimmedNote ? ` Note: ${trimmedNote}` : ""}`,
+    entityType: "listing",
+    entityId: listing._id.toString(),
+    link: "/dashboard#notifications",
+  });
+
   return {
     listingId: listing._id.toString(),
     status: listing.status,
     verificationStatus: listing.verificationStatus,
+  };
+}
+
+export async function updateListingLifecycleStatus(
+  session: AuthSession,
+  listingId: string,
+  nextStatus: ListingStatus,
+  statusNote?: string,
+) {
+  const actor = await ensureUserRecord(session);
+  const listings = await getCollection("listings");
+  const tokenUnlocks = await getCollection("tokenUnlocks");
+  const auditLogs = await getCollection("auditLogs");
+  const listingObjectId = parseObjectId(listingId);
+  const listing = await listings.findOne({
+    _id: listingObjectId,
+    ownerUserId: actor._id,
+  });
+
+  if (!listing) {
+    throw new Error("The selected listing could not be found for this owner account.");
+  }
+
+  if (listing.verificationStatus !== "approved") {
+    throw new Error("Only approved listings can enter lifecycle tracking.");
+  }
+
+  if (!canManageListingLifecycle(listing.status)) {
+    throw new Error("This listing is already in a final lifecycle state.");
+  }
+
+  if (!getAllowedNextListingStatuses(listing.status).includes(nextStatus)) {
+    throw new Error(`You cannot move a listing from ${humanizeEnum(listing.status)} to ${humanizeEnum(nextStatus)}.`);
+  }
+
+  const now = new Date();
+  const trimmedStatusNote = statusNote?.trim() || undefined;
+  const updatedListing = await listings.findOneAndUpdate(
+    {
+      _id: listingObjectId,
+      ownerUserId: actor._id,
+    },
+    {
+      $set: {
+        status: nextStatus,
+        updatedAt: now,
+      },
+    },
+    {
+      returnDocument: "after",
+    },
+  );
+
+  if (!updatedListing) {
+    throw new Error("Could not update the selected listing status.");
+  }
+
+  await auditLogs.insertOne({
+    actorUserId: actor._id,
+    entityType: "listing",
+    entityId: listingId,
+    action: "listing_status_updated",
+    metadata: {
+      previousStatus: listing.status,
+      nextStatus,
+      statusNote: trimmedStatusNote,
+    },
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  await notifyUsersByRoles(adminRoles, {
+    kind: "listing_status_changed",
+    severity: nextStatus === "active" ? "success" : "warning",
+    title: "Listing lifecycle updated",
+    body: `${updatedListing.title} moved from ${humanizeEnum(listing.status)} to ${humanizeEnum(nextStatus)}.`,
+    entityType: "listing",
+    entityId: listingId,
+    link: "/admin#notifications",
+  });
+
+  const unlockRecords = await tokenUnlocks
+    .find({
+      listingId: listingObjectId,
+    })
+    .project({ userId: 1 })
+    .toArray();
+  const buyerUserIds = unlockRecords
+    .map((record) => record.userId)
+    .filter((userId) => !userId.equals(actor._id));
+
+  if (buyerUserIds.length > 0) {
+    await notifyUsersByIds(buyerUserIds, {
+      kind: "listing_status_changed",
+      severity: isListingPubliclyVisible(nextStatus) ? "success" : "warning",
+      title: "Listing status changed",
+      body: `${updatedListing.title} is now ${humanizeEnum(nextStatus)}.${trimmedStatusNote ? ` Note: ${trimmedStatusNote}` : ""}`,
+      entityType: "listing",
+      entityId: listingId,
+      link: isListingPubliclyVisible(nextStatus) ? `/listings/${listingId}` : "/dashboard#notifications",
+    });
+  }
+
+  return {
+    listingId,
+    previousStatus: listing.status,
+    status: updatedListing.status,
   };
 }

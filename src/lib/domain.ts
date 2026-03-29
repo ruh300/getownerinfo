@@ -42,6 +42,46 @@ export type SeekerRequestStatus = (typeof seekerRequestStatuses)[number];
 
 export const seekerRequestDurations = [7, 14, 30] as const;
 export type SeekerRequestDurationDays = (typeof seekerRequestDurations)[number];
+export type SeekerRequestDurationKey = `${SeekerRequestDurationDays}`;
+
+export const seekerResponseStatuses = ["sent", "withdrawn"] as const;
+export type SeekerResponseStatus = (typeof seekerResponseStatuses)[number];
+
+export const paymentProviders = ["afripay"] as const;
+export type PaymentProvider = (typeof paymentProviders)[number];
+
+export const paymentPurposes = [
+  "listing_fee",
+  "token_fee",
+  "commission",
+  "penalty",
+  "seeker_post_fee",
+  "seeker_view_token",
+] as const;
+export type PaymentPurpose = (typeof paymentPurposes)[number];
+
+export const paymentStatuses = ["pending", "paid", "failed", "cancelled"] as const;
+export type PaymentStatus = (typeof paymentStatuses)[number];
+
+export const notificationKinds = [
+  "listing_submitted_for_review",
+  "listing_approved",
+  "listing_rejected",
+  "listing_status_changed",
+  "listing_unlocked",
+  "buyer_inquiry_received",
+  "listing_reply_received",
+  "seeker_request_created",
+  "seeker_request_unlocked",
+  "seeker_response_received",
+  "seeker_request_fulfilled",
+  "seeker_request_closed",
+  "seeker_match_message_received",
+] as const;
+export type NotificationKind = (typeof notificationKinds)[number];
+
+export const notificationSeverities = ["info", "success", "warning"] as const;
+export type NotificationSeverity = (typeof notificationSeverities)[number];
 
 export type TimestampFields = {
   createdAt: Date;
@@ -173,10 +213,16 @@ export type PaymentDocument = BaseDocument & {
   seekerRequestId?: ObjectId;
   amountRwf: number;
   currency: "RWF";
-  provider: "afripay";
-  purpose: "listing_fee" | "token_fee" | "commission" | "penalty" | "seeker_post_fee" | "seeker_view_token";
-  status: "pending" | "paid" | "failed" | "cancelled";
+  provider: PaymentProvider;
+  purpose: PaymentPurpose;
+  status: PaymentStatus;
   reference: string;
+  providerReference?: string;
+  providerTransactionId?: string;
+  settledAt?: Date;
+  failedAt?: Date;
+  cancelledAt?: Date;
+  metadata?: Record<string, unknown>;
 };
 
 export type SeekerRequestDocument = BaseDocument & {
@@ -197,6 +243,10 @@ export type SeekerRequestDocument = BaseDocument & {
   contactPhone: string;
   postedFeeRwf: number;
   viewTokenFeeRwf: number;
+  matchedResponseId?: ObjectId;
+  matchedResponderUserId?: ObjectId;
+  matchedResponderName?: string;
+  closureNote?: string;
   expiresAt: Date;
   fulfilledAt?: Date;
   closedAt?: Date;
@@ -218,11 +268,33 @@ export type SeekerRequestUnlockDocument = BaseDocument & {
   fieldsUnlocked: Array<"seekerName" | "seekerPhone" | "preferredContactTime" | "fullDetails">;
 };
 
+export type SeekerResponseDocument = BaseDocument & {
+  seekerRequestId: ObjectId;
+  requesterUserId: ObjectId;
+  responderUserId: ObjectId;
+  responderRole: UserRole;
+  responderName: string;
+  responderPhone?: string;
+  message: string;
+  status: SeekerResponseStatus;
+};
+
+export type SeekerMatchMessageDocument = BaseDocument & {
+  seekerRequestId: ObjectId;
+  requesterUserId: ObjectId;
+  responderUserId: ObjectId;
+  senderUserId: ObjectId;
+  senderRole: UserRole;
+  senderName: string;
+  body: string;
+};
+
 export type BlockedContentType = "phone" | "email" | "link" | "location" | "id_number";
 
 export type ChatMessageDocument = BaseDocument & {
   listingId: ObjectId;
   ownerUserId: ObjectId;
+  threadBuyerUserId: ObjectId;
   senderUserId: ObjectId;
   senderRole: UserRole;
   senderName: string;
@@ -233,8 +305,38 @@ export type ChatMessageDocument = BaseDocument & {
 
 export type AuditLogDocument = BaseDocument & {
   actorUserId?: ObjectId;
-  entityType: "listing" | "payment" | "token_unlock" | "penalty" | "user" | "chat_message" | "seeker_request";
+  entityType:
+    | "listing"
+    | "payment"
+    | "token_unlock"
+    | "penalty"
+    | "user"
+    | "chat_message"
+    | "seeker_request"
+    | "platform_setting";
   entityId: string;
   action: string;
   metadata?: Record<string, unknown>;
+};
+
+export type NotificationDocument = BaseDocument & {
+  userId: ObjectId;
+  kind: NotificationKind;
+  severity: NotificationSeverity;
+  title: string;
+  body: string;
+  entityType: AuditLogDocument["entityType"];
+  entityId: string;
+  link?: string;
+  readAt?: Date;
+};
+
+export type ListingTokenFeeMatrix = Record<ListingCategory, Record<ListingModel, number>>;
+export type SeekerPostFeeByDuration = Record<SeekerRequestDurationKey, number>;
+
+export type FeeSettingsDocument = BaseDocument & {
+  key: "default";
+  listingTokenFeeMatrix: ListingTokenFeeMatrix;
+  seekerPostFeeByDuration: SeekerPostFeeByDuration;
+  seekerViewTokenFeeRwf: number;
 };

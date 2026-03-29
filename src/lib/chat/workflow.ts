@@ -4,6 +4,7 @@ import type { AuthSession } from "@/lib/auth/types";
 import { ensureUserRecord } from "@/lib/auth/user-record";
 import { getCollection } from "@/lib/data/collections";
 import type { BlockedContentType, ChatMessageDocument, ListingDocument } from "@/lib/domain";
+import { createNotification } from "@/lib/notifications/workflow";
 
 const maxMessageLength = 800;
 const conversationLimit = 12;
@@ -24,10 +25,15 @@ export type OwnerInquirySummary = {
   listingId: string;
   listingTitle: string;
   listingCategory: ListingDocument["category"];
+  listingStatus: ListingDocument["status"];
+  buyerUserId: string;
   buyerName: string;
   buyerPhone: string | null;
   body: string;
   createdAt: string;
+  buyerUnlockedListing: boolean;
+  messageCount: number;
+  lastSenderRole: ChatMessageDocument["senderRole"];
 };
 
 function parseObjectId(value: string) {
@@ -82,14 +88,31 @@ function detectBlockedContentTypes(body: string): BlockedContentType[] {
   return [...blocked];
 }
 
-async function getAvailableListing(listingId: string) {
+async function getListingForConversation(listingId: string) {
   const listings = await getCollection("listings");
 
   return listings.findOne({
     _id: parseObjectId(listingId),
-    status: "active",
     verificationStatus: "approved",
   });
+}
+
+async function hasBuyerUnlockedListing(userId: ObjectId, listingId: ObjectId) {
+  const tokenUnlocks = await getCollection("tokenUnlocks");
+  const unlock = await tokenUnlocks.findOne({
+    userId,
+    listingId,
+  });
+
+  return Boolean(unlock);
+}
+
+function getThreadBuyerUserId(message: Pick<ChatMessageDocument, "threadBuyerUserId" | "senderRole" | "senderUserId">) {
+  if (message.threadBuyerUserId) {
+    return message.threadBuyerUserId;
+  }
+
+  return message.senderRole === "buyer" ? message.senderUserId : null;
 }
 
 function serializeMessage(message: WithId<ChatMessageDocument>): ListingMessageSummary {
@@ -111,22 +134,33 @@ export async function getListingMessagesForSession(
   const user = await ensureUserRecord(session);
   const chatMessages = await getCollection("chatMessages");
   const listingObjectId = parseObjectId(listingId);
-  const listing = await getAvailableListing(listingId);
+  const listing = await getListingForConversation(listingId);
 
   if (!listing) {
     throw new Error("This listing is not available for inquiries right now.");
   }
 
-  const filter = listing.ownerUserId.equals(user._id)
-    ? {
-        listingId: listingObjectId,
-        ownerUserId: user._id,
-        status: "sent" as const,
-      }
-    : {
-        listingId: listingObjectId,
-        senderUserId: user._id,
-      };
+  const filter =
+    session.user.role === "buyer"
+      ? {
+          listingId: listingObjectId,
+          $or: [
+            { threadBuyerUserId: user._id },
+            { senderUserId: user._id },
+          ],
+        }
+      : listing.ownerUserId.equals(user._id)
+        ? {
+            listingId: listingObjectId,
+            ownerUserId: user._id,
+            status: "sent" as const,
+          }
+        : null;
+
+  if (!filter) {
+    throw new Error("This role cannot open the selected conversation.");
+  }
+
   const messages = await chatMessages.find(filter).sort({ createdAt: -1 }).limit(conversationLimit).toArray();
 
   return messages.reverse().map(serializeMessage);
@@ -136,15 +170,12 @@ export async function sendListingMessageForSession(
   session: AuthSession,
   listingId: string,
   body: string,
+  options?: {
+    buyerUserId?: string;
+  },
 ) {
   const user = await ensureUserRecord(session);
-
-  if (session.user.role !== "buyer") {
-    throw new Error("Availability questions are currently limited to buyer accounts.");
-  }
-
   const listings = await getCollection("listings");
-  const tokenUnlocks = await getCollection("tokenUnlocks");
   const chatMessages = await getCollection("chatMessages");
   const auditLogs = await getCollection("auditLogs");
   const listingObjectId = parseObjectId(listingId);
@@ -158,71 +189,160 @@ export async function sendListingMessageForSession(
     throw new Error("This listing is not available for inquiries right now.");
   }
 
-  if (listing.ownerUserId.equals(user._id)) {
-    throw new Error("You cannot send a buyer inquiry on your own listing.");
-  }
-
   const normalizedBody = normalizeMessageBody(body);
-  const hasUnlock = Boolean(
-    await tokenUnlocks.findOne({
-      userId: user._id,
-      listingId: listingObjectId,
-    }),
-  );
-  const blockedContentTypes = hasUnlock ? [] : detectBlockedContentTypes(normalizedBody);
   const now = new Date();
-  const messageDocument: Omit<ChatMessageDocument, "_id"> = {
-    listingId: listingObjectId,
-    ownerUserId: listing.ownerUserId,
-    senderUserId: user._id,
-    senderRole: session.user.role,
-    senderName: session.user.fullName.trim(),
-    body: normalizedBody,
-    status: blockedContentTypes.length > 0 ? "blocked" : "sent",
-    blockedContentTypes: blockedContentTypes.length > 0 ? blockedContentTypes : undefined,
-    createdAt: now,
-    updatedAt: now,
-  };
-  const insertResult = await chatMessages.insertOne(messageDocument);
 
-  if (blockedContentTypes.length > 0) {
+  if (session.user.role === "buyer") {
+    if (listing.ownerUserId.equals(user._id)) {
+      throw new Error("You cannot send a buyer inquiry on your own listing.");
+    }
+
+    const hasUnlock = await hasBuyerUnlockedListing(user._id, listingObjectId);
+    const blockedContentTypes = hasUnlock ? [] : detectBlockedContentTypes(normalizedBody);
+    const messageDocument: Omit<ChatMessageDocument, "_id"> = {
+      listingId: listingObjectId,
+      ownerUserId: listing.ownerUserId,
+      threadBuyerUserId: user._id,
+      senderUserId: user._id,
+      senderRole: session.user.role,
+      senderName: session.user.fullName.trim(),
+      body: normalizedBody,
+      status: blockedContentTypes.length > 0 ? "blocked" : "sent",
+      blockedContentTypes: blockedContentTypes.length > 0 ? blockedContentTypes : undefined,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const insertResult = await chatMessages.insertOne(messageDocument);
+
+    if (blockedContentTypes.length > 0) {
+      await auditLogs.insertOne({
+        actorUserId: user._id,
+        entityType: "chat_message",
+        entityId: insertResult.insertedId.toString(),
+        action: "buyer_inquiry_blocked_before_unlock",
+        metadata: {
+          listingId,
+          ownerUserId: listing.ownerUserId.toString(),
+          blockedContentTypes,
+        },
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      return {
+        delivered: false,
+        message: serializeMessage({
+          ...messageDocument,
+          _id: insertResult.insertedId,
+        }),
+        error:
+          "Contact details, direct links, and exact location clues stay blocked until you unlock the listing.",
+      };
+    }
+
     await auditLogs.insertOne({
       actorUserId: user._id,
       entityType: "chat_message",
       entityId: insertResult.insertedId.toString(),
-      action: "buyer_inquiry_blocked_before_unlock",
+      action: hasUnlock ? "buyer_inquiry_sent_after_unlock" : "buyer_inquiry_sent_before_unlock",
       metadata: {
         listingId,
         ownerUserId: listing.ownerUserId.toString(),
-        blockedContentTypes,
+        unlocked: hasUnlock,
       },
       createdAt: now,
       updatedAt: now,
     });
 
+    await createNotification({
+      userId: listing.ownerUserId,
+      kind: "buyer_inquiry_received",
+      severity: "info",
+      title: "New buyer inquiry",
+      body: `${session.user.fullName} sent a question about ${listing.title}.`,
+      entityType: "chat_message",
+      entityId: insertResult.insertedId.toString(),
+      link: "/dashboard#notifications",
+    });
+
     return {
-      delivered: false,
+      delivered: true,
       message: serializeMessage({
         ...messageDocument,
         _id: insertResult.insertedId,
       }),
-      error:
-        "Contact details, direct links, and exact location clues stay blocked until you unlock the listing.",
+      error: null,
     };
   }
+
+  if (!listing.ownerUserId.equals(user._id)) {
+    throw new Error("Only the listing owner can reply in this conversation.");
+  }
+
+  if (!options?.buyerUserId || !ObjectId.isValid(options.buyerUserId)) {
+    throw new Error("A valid buyer conversation target is required for owner replies.");
+  }
+
+  if (listing.status !== "active") {
+    throw new Error("Owner replies are currently limited to active listings.");
+  }
+
+  const threadBuyerUserId = new ObjectId(options.buyerUserId);
+  const buyerHasUnlock = await hasBuyerUnlockedListing(threadBuyerUserId, listingObjectId);
+
+  if (!buyerHasUnlock) {
+    throw new Error("The buyer must unlock this listing before owner replies are enabled.");
+  }
+
+  const existingBuyerMessage = await chatMessages.findOne({
+    listingId: listingObjectId,
+    ownerUserId: user._id,
+    $or: [{ threadBuyerUserId }, { senderUserId: threadBuyerUserId }],
+    senderRole: "buyer",
+    status: "sent",
+  });
+
+  if (!existingBuyerMessage) {
+    throw new Error("This buyer does not have an active conversation thread on the listing.");
+  }
+
+  const messageDocument: Omit<ChatMessageDocument, "_id"> = {
+    listingId: listingObjectId,
+    ownerUserId: listing.ownerUserId,
+    threadBuyerUserId,
+    senderUserId: user._id,
+    senderRole: session.user.role,
+    senderName: session.user.fullName.trim(),
+    body: normalizedBody,
+    status: "sent",
+    blockedContentTypes: undefined,
+    createdAt: now,
+    updatedAt: now,
+  };
+  const insertResult = await chatMessages.insertOne(messageDocument);
 
   await auditLogs.insertOne({
     actorUserId: user._id,
     entityType: "chat_message",
     entityId: insertResult.insertedId.toString(),
-    action: hasUnlock ? "buyer_inquiry_sent_after_unlock" : "buyer_inquiry_sent_before_unlock",
+    action: "owner_reply_sent_after_unlock",
     metadata: {
       listingId,
-      ownerUserId: listing.ownerUserId.toString(),
-      unlocked: hasUnlock,
+      buyerUserId: threadBuyerUserId.toString(),
     },
     createdAt: now,
     updatedAt: now,
+  });
+
+  await createNotification({
+    userId: threadBuyerUserId,
+    kind: "listing_reply_received",
+    severity: "info",
+    title: "Owner replied to your listing conversation",
+    body: `${listing.ownerContact.fullName} replied about ${listing.title}.`,
+    entityType: "chat_message",
+    entityId: insertResult.insertedId.toString(),
+    link: `/listings/${listingId}`,
   });
 
   return {
@@ -239,6 +359,7 @@ export async function getOwnerInquiryFeedForUser(ownerUserId: ObjectId): Promise
   const chatMessages = await getCollection("chatMessages");
   const users = await getCollection("users");
   const listings = await getCollection("listings");
+  const tokenUnlocks = await getCollection("tokenUnlocks");
   const messages = await chatMessages
     .find({
       ownerUserId,
@@ -252,12 +373,19 @@ export async function getOwnerInquiryFeedForUser(ownerUserId: ObjectId): Promise
     return [];
   }
 
-  const senderIds = [...new Set(messages.map((message) => message.senderUserId.toString()))].map((id) => new ObjectId(id));
+  const buyerIds = [
+    ...new Set(
+      messages
+        .map((message) => getThreadBuyerUserId(message))
+        .filter((buyerUserId): buyerUserId is ObjectId => buyerUserId !== null)
+        .map((buyerUserId) => buyerUserId.toString()),
+    ),
+  ].map((id) => new ObjectId(id));
   const listingIds = [...new Set(messages.map((message) => message.listingId.toString()))].map((id) => new ObjectId(id));
-  const [buyers, ownedListings] = await Promise.all([
+  const [buyers, ownedListings, unlockRecords] = await Promise.all([
     users
       .find({
-        _id: { $in: senderIds },
+        _id: { $in: buyerIds },
       })
       .toArray(),
     listings
@@ -265,29 +393,56 @@ export async function getOwnerInquiryFeedForUser(ownerUserId: ObjectId): Promise
         _id: { $in: listingIds },
       })
       .toArray(),
+    tokenUnlocks
+      .find({
+        userId: { $in: buyerIds },
+        listingId: { $in: listingIds },
+      })
+      .toArray(),
   ]);
   const buyerMap = new Map(buyers.map((buyer) => [buyer._id.toString(), buyer]));
   const listingMap = new Map(ownedListings.map((listing) => [listing._id.toString(), listing]));
+  const unlockSet = new Set(unlockRecords.map((unlock) => `${unlock.listingId.toString()}:${unlock.userId.toString()}`));
+  const threadMap = new Map<string, WithId<ChatMessageDocument>[]>();
 
-  return messages.flatMap((message) => {
-    const listing = listingMap.get(message.listingId.toString());
+  for (const message of messages) {
+    const buyerUserId = getThreadBuyerUserId(message);
 
-    if (!listing) {
+    if (!buyerUserId) {
+      continue;
+    }
+
+    const threadKey = `${message.listingId.toString()}:${buyerUserId.toString()}`;
+    const currentThread = threadMap.get(threadKey) ?? [];
+    currentThread.push(message);
+    threadMap.set(threadKey, currentThread);
+  }
+
+  return [...threadMap.entries()].flatMap(([threadKey, threadMessages]) => {
+    const [listingId, buyerUserId] = threadKey.split(":");
+    const listing = listingMap.get(listingId);
+    const buyer = buyerMap.get(buyerUserId);
+    const latestMessage = threadMessages[0];
+
+    if (!listing || !buyer || !latestMessage) {
       return [];
     }
 
-    const buyer = buyerMap.get(message.senderUserId.toString());
-
     return [
       {
-        id: message._id.toString(),
-        listingId: listing._id.toString(),
+        id: latestMessage._id.toString(),
+        listingId,
         listingTitle: listing.title,
         listingCategory: listing.category,
-        buyerName: message.senderName,
-        buyerPhone: buyer?.phone ?? null,
-        body: message.body,
-        createdAt: message.createdAt.toISOString(),
+        listingStatus: listing.status,
+        buyerUserId,
+        buyerName: buyer.fullName,
+        buyerPhone: buyer.phone ?? null,
+        body: latestMessage.body,
+        createdAt: latestMessage.createdAt.toISOString(),
+        buyerUnlockedListing: unlockSet.has(`${listingId}:${buyerUserId}`),
+        messageCount: threadMessages.length,
+        lastSenderRole: latestMessage.senderRole,
       },
     ];
   });

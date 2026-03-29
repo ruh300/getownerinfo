@@ -1,9 +1,15 @@
+import { FeeSettingsPanel } from "@/components/admin/fee-settings-panel";
 import Link from "next/link";
 
+import { PaymentOverview } from "@/components/admin/payment-overview";
+import { NotificationCenter } from "@/components/notifications/notification-center";
 import { ReviewBoard } from "@/components/admin/review-board";
 import { requireSession } from "@/lib/auth/session";
-import { adminRoles } from "@/lib/auth/types";
+import { adminRoles, canConfigureFees } from "@/lib/auth/types";
+import { getFeeSettingsSummary } from "@/lib/fee-settings/workflow";
 import { getAdminWorkspaceData } from "@/lib/listings/workflow";
+import { getNotificationCenterForSession } from "@/lib/notifications/workflow";
+import { getAdminPaymentOverviewData } from "@/lib/payments/workflow";
 
 export default async function AdminPage() {
   const session = await requireSession({
@@ -11,12 +17,55 @@ export default async function AdminPage() {
     redirectTo: "/sign-in?next=/admin",
   });
   let workspace: Awaited<ReturnType<typeof getAdminWorkspaceData>> | null = null;
+  let paymentOverview: Awaited<ReturnType<typeof getAdminPaymentOverviewData>> | null = null;
+  let feeSettings: Awaited<ReturnType<typeof getFeeSettingsSummary>> | null = null;
+  let notificationCenter: Awaited<ReturnType<typeof getNotificationCenterForSession>> | null = null;
   let workspaceError: string | null = null;
+  let paymentError: string | null = null;
+  let feeSettingsError: string | null = null;
+  let notificationError: string | null = null;
 
-  try {
-    workspace = await getAdminWorkspaceData();
-  } catch (error) {
-    workspaceError = error instanceof Error ? error.message : "Could not load the admin review workspace.";
+  const [workspaceResult, paymentResult, feeSettingsResult, notificationResult] = await Promise.allSettled([
+    getAdminWorkspaceData(),
+    getAdminPaymentOverviewData(),
+    getFeeSettingsSummary(),
+    getNotificationCenterForSession(session),
+  ]);
+
+  if (workspaceResult.status === "fulfilled") {
+    workspace = workspaceResult.value;
+  } else {
+    workspaceError =
+      workspaceResult.reason instanceof Error
+        ? workspaceResult.reason.message
+        : "Could not load the admin review workspace.";
+  }
+
+  if (paymentResult.status === "fulfilled") {
+    paymentOverview = paymentResult.value;
+  } else {
+    paymentError =
+      paymentResult.reason instanceof Error
+        ? paymentResult.reason.message
+        : "Could not load admin payment analytics.";
+  }
+
+  if (feeSettingsResult.status === "fulfilled") {
+    feeSettings = feeSettingsResult.value;
+  } else {
+    feeSettingsError =
+      feeSettingsResult.reason instanceof Error
+        ? feeSettingsResult.reason.message
+        : "Could not load fee settings.";
+  }
+
+  if (notificationResult.status === "fulfilled") {
+    notificationCenter = notificationResult.value;
+  } else {
+    notificationError =
+      notificationResult.reason instanceof Error
+        ? notificationResult.reason.message
+        : "Could not load admin notifications.";
   }
 
   return (
@@ -51,6 +100,33 @@ export default async function AdminPage() {
         </section>
       ) : null}
 
+      {paymentError ? (
+        <section className="rounded-[24px] border border-[rgba(184,50,50,0.2)] bg-[rgba(184,50,50,0.08)] px-5 py-4 text-sm leading-6 text-[#9c2d2d]">
+          Could not load admin payment data: {paymentError}
+        </section>
+      ) : null}
+
+      {feeSettingsError ? (
+        <section className="rounded-[24px] border border-[rgba(184,50,50,0.2)] bg-[rgba(184,50,50,0.08)] px-5 py-4 text-sm leading-6 text-[#9c2d2d]">
+          Could not load fee settings: {feeSettingsError}
+        </section>
+      ) : null}
+
+      {notificationError ? (
+        <section className="rounded-[24px] border border-[rgba(184,50,50,0.2)] bg-[rgba(184,50,50,0.08)] px-5 py-4 text-sm leading-6 text-[#9c2d2d]">
+          Could not load admin notifications: {notificationError}
+        </section>
+      ) : null}
+
+      {notificationCenter ? (
+        <NotificationCenter
+          center={notificationCenter}
+          eyebrow="Alerts"
+          title="Admin notifications"
+          emptyMessage="No admin notifications yet. New review submissions, seeker demand, and owner-side events will appear here."
+        />
+      ) : null}
+
       {workspace ? (
         <>
           <section className="grid gap-6 md:grid-cols-4">
@@ -83,6 +159,10 @@ export default async function AdminPage() {
           />
         </>
       ) : null}
+
+      {paymentOverview ? <PaymentOverview overview={paymentOverview} /> : null}
+
+      {feeSettings ? <FeeSettingsPanel settings={feeSettings} canEdit={canConfigureFees(session.user.role)} /> : null}
     </main>
   );
 }

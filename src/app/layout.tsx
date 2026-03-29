@@ -3,6 +3,7 @@ import { DM_Sans, DM_Serif_Display } from "next/font/google";
 
 import { SiteHeader } from "@/components/site-header";
 import { getCurrentSession } from "@/lib/auth/session";
+import { getUnreadNotificationCountForSession } from "@/lib/notifications/workflow";
 
 import "./globals.css";
 
@@ -32,12 +33,21 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const session = await getCurrentSession();
+  let unreadNotificationCount = 0;
+
+  if (session) {
+    try {
+      unreadNotificationCount = await getUnreadNotificationCountForSession(session);
+    } catch {
+      unreadNotificationCount = 0;
+    }
+  }
 
   return (
     <html lang="en">
       <body className={`${dmSans.variable} ${dmSerif.variable} bg-[var(--background)] text-[var(--foreground)] antialiased`}>
         <div className="min-h-screen">
-          <SiteHeader session={session} />
+          <SiteHeader session={session} unreadNotificationCount={unreadNotificationCount} />
           {children}
         </div>
       </body>

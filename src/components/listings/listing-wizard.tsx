@@ -11,6 +11,7 @@ import {
   type OwnerType,
   type OwnershipProofAsset,
 } from "@/lib/domain";
+import type { FeeSettingsSummary } from "@/lib/fee-settings/workflow";
 import { formatRwf } from "@/lib/formatting/currency";
 import { uploadListingImage, uploadOwnershipProof } from "@/lib/uploads/cloudinary-client";
 
@@ -127,7 +128,13 @@ function normalizeMedia(media: ListingMedia[]) {
   }));
 }
 
-export function ListingWizard({ signedInUser }: { signedInUser: AuthUser }) {
+export function ListingWizard({
+  signedInUser,
+  feeSettings,
+}: {
+  signedInUser: AuthUser;
+  feeSettings: FeeSettingsSummary;
+}) {
   const [category, setCategory] = useState<ListingCategory>("real_estate_rent");
   const [ownerType, setOwnerType] = useState<OwnerType>("owner");
   const [fullName, setFullName] = useState("");
@@ -529,6 +536,7 @@ export function ListingWizard({ signedInUser }: { signedInUser: AuthUser }) {
 
   const summaryModel = eligibility?.selectedModel ?? "B";
   const selectedCategoryLabel = categoryOptions.find((option) => option.value === category)?.label ?? category;
+  const currentTokenFeeRwf = feeSettings.listingTokenFeeMatrix[category][summaryModel];
   const isBusy = isSavingDraft || isSubmittingDraft;
   const completenessItems = [
     { label: "Owner details", done: fullName.trim().length > 1 && phone.trim().length > 5 },
@@ -629,6 +637,11 @@ export function ListingWizard({ signedInUser }: { signedInUser: AuthUser }) {
               <button type="button" onClick={() => setRequestedModel("B")} className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition ${requestedModel === "B" ? "border-[var(--primary)] bg-[rgba(26,77,46,0.08)] text-[var(--primary)]" : "border-[var(--border)] bg-white text-[var(--foreground)]"}`}>Choose Model B</button>
               <button type="button" onClick={() => setTokenFeeEnabled((current) => !current)} className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition ${tokenFeeEnabled ? "border-[var(--accent)] bg-[rgba(200,134,10,0.12)] text-[var(--accent)]" : "border-[var(--border)] bg-white text-[var(--foreground)]"}`}>Buyer token fee {tokenFeeEnabled ? "enabled" : "disabled"}</button>
             </div>
+            <p className="mt-4 text-sm leading-6 text-[var(--muted)]">
+              {tokenFeeEnabled
+                ? `Current platform unlock fee for ${selectedCategoryLabel} / Model ${summaryModel}: ${formatRwf(currentTokenFeeRwf)}.`
+                : "Buyer token unlock is currently disabled for this listing draft."}
+            </p>
           </section>
 
           <section className="rounded-[28px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_20px_50px_rgba(0,0,0,0.06)]">
@@ -724,7 +737,7 @@ export function ListingWizard({ signedInUser }: { signedInUser: AuthUser }) {
               <div><p className="font-semibold text-[var(--foreground)]">Owner</p><p>{fullName || "Add owner contact details."}</p></div>
               <div><p className="font-semibold text-[var(--foreground)]">Location</p><p>{approximateAreaLabel || "Add an approximate area label."}</p></div>
               <div><p className="font-semibold text-[var(--foreground)]">Pricing</p><p>{Number.isInteger(parsedPrice) && parsedPrice > 0 ? formatRwf(parsedPrice) : "Enter a valid price."}</p><p>{Number.isInteger(parsedUnits) && parsedUnits > 0 ? `${parsedUnits} unit(s)` : "Enter unit count."}</p></div>
-              <div><p className="font-semibold text-[var(--foreground)]">Model preference</p><p>Requested: Model {requestedModel} - Recommended: Model {summaryModel}</p></div>
+              <div><p className="font-semibold text-[var(--foreground)]">Model preference</p><p>Requested: Model {requestedModel} - Recommended: Model {summaryModel}</p><p>{tokenFeeEnabled ? `Unlock fee: ${formatRwf(currentTokenFeeRwf)}` : "Unlock fee disabled"}</p></div>
               <div><p className="font-semibold text-[var(--foreground)]">Uploads</p><p>{media.length} listing image(s)</p><p>{ownershipProof ? "Ownership proof uploaded" : "Ownership proof pending"}</p></div>
             </div>
             <div className="mt-6 space-y-3">

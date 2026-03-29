@@ -4,7 +4,13 @@ import { canAccessAdmin, canCreateListings, type AuthSession } from "@/lib/auth/
 
 import { SignOutButton } from "./auth/sign-out-button";
 
-export function SiteHeader({ session }: { session: AuthSession | null }) {
+export function SiteHeader({
+  session,
+  unreadNotificationCount,
+}: {
+  session: AuthSession | null;
+  unreadNotificationCount: number;
+}) {
   const role = session?.user.role;
 
   return (
@@ -33,6 +39,17 @@ export function SiteHeader({ session }: { session: AuthSession | null }) {
             <>
               <Link href="/dashboard" className="rounded-full px-3 py-2 transition hover:bg-[var(--surface-alt)] hover:text-[var(--foreground)]">
                 Dashboard
+              </Link>
+              <Link
+                href={role && canAccessAdmin(role) ? "/admin#notifications" : "/dashboard#notifications"}
+                className="rounded-full px-3 py-2 transition hover:bg-[var(--surface-alt)] hover:text-[var(--foreground)]"
+              >
+                Alerts
+                {unreadNotificationCount > 0 ? (
+                  <span className="ml-2 inline-flex min-w-6 items-center justify-center rounded-full bg-[var(--accent)] px-2 py-0.5 text-[10px] font-bold text-white">
+                    {Math.min(unreadNotificationCount, 99)}
+                  </span>
+                ) : null}
               </Link>
               {role === "buyer" ? (
                 <Link href="/seeker-requests/new" className="rounded-full px-3 py-2 transition hover:bg-[var(--surface-alt)] hover:text-[var(--foreground)]">

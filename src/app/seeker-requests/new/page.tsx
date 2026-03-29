@@ -2,9 +2,11 @@ import Link from "next/link";
 
 import { SeekerRequestForm } from "@/components/seeker-requests/seeker-request-form";
 import { requireSession } from "@/lib/auth/session";
+import { getFeeSettingsSummary } from "@/lib/fee-settings/workflow";
 
 export default async function NewSeekerRequestPage() {
   await requireSession({ roles: ["buyer"] });
+  const feeSettings = await getFeeSettingsSummary();
 
   return (
     <main className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-6xl flex-col gap-8 px-5 py-8 md:px-8 md:py-10">
@@ -52,7 +54,7 @@ export default async function NewSeekerRequestPage() {
       </section>
 
       <section className="rounded-[30px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.08)] md:p-8">
-        <SeekerRequestForm />
+        <SeekerRequestForm feeSettings={feeSettings} />
       </section>
     </main>
   );

@@ -3,6 +3,9 @@ import { ObjectId } from "mongodb";
 import type { AuthSession } from "@/lib/auth/types";
 import { ensureUserRecord } from "@/lib/auth/user-record";
 import { getCollection } from "@/lib/data/collections";
+import { getFeeSettingsSummary, resolveListingTokenFeeRwf } from "@/lib/fee-settings/workflow";
+import { createNotification } from "@/lib/notifications/workflow";
+import { createPaymentRecord } from "@/lib/payments/workflow";
 
 function parseObjectId(value: string) {
   if (!ObjectId.isValid(value)) {
@@ -28,7 +31,6 @@ export async function unlockListingForSession(session: AuthSession, listingId: s
   const user = await ensureUserRecord(session);
   const listings = await getCollection("listings");
   const tokenUnlocks = await getCollection("tokenUnlocks");
-  const payments = await getCollection("payments");
   const auditLogs = await getCollection("auditLogs");
   const listingObjectId = parseObjectId(listingId);
   const listing = await listings.findOne({
@@ -55,7 +57,10 @@ export async function unlockListingForSession(session: AuthSession, listingId: s
   }
 
   const now = new Date();
-  const unlockAmountRwf = listing.tokenFeeEnabled ? listing.tokenFeeRwf ?? 10_000 : 0;
+  const feeSettings = listing.tokenFeeEnabled ? await getFeeSettingsSummary() : null;
+  const unlockAmountRwf = listing.tokenFeeEnabled
+    ? listing.tokenFeeRwf ?? resolveListingTokenFeeRwf(feeSettings!, listing.category, listing.model)
+    : 0;
   await tokenUnlocks.insertOne({
     userId: user._id,
     listingId: listingObjectId,
@@ -66,17 +71,16 @@ export async function unlockListingForSession(session: AuthSession, listingId: s
   });
 
   if (unlockAmountRwf > 0) {
-    await payments.insertOne({
+    await createPaymentRecord({
       userId: user._id,
       listingId: listingObjectId,
       amountRwf: unlockAmountRwf,
-      currency: "RWF",
-      provider: "afripay",
       purpose: "token_fee",
-      status: "paid",
-      reference: `TOKEN-${listingObjectId.toString().slice(-6)}-${now.getTime()}`,
-      createdAt: now,
-      updatedAt: now,
+      referencePrefix: "TOKEN",
+      metadata: {
+        flow: "prototype_listing_unlock",
+        listingTitle: listing.title,
+      },
     });
   }
 
@@ -92,6 +96,17 @@ export async function unlockListingForSession(session: AuthSession, listingId: s
     },
     createdAt: now,
     updatedAt: now,
+  });
+
+  await createNotification({
+    userId: listing.ownerUserId,
+    kind: "listing_unlocked",
+    severity: "success",
+    title: "A buyer unlocked your listing",
+    body: `${user.fullName} unlocked contact access for ${listing.title}.`,
+    entityType: "token_unlock",
+    entityId: listingId,
+    link: "/dashboard#notifications",
   });
 
   return {

@@ -1,6 +1,7 @@
 import { ObjectId, type Filter, type WithId } from "mongodb";
 
 import type { AuthSession } from "@/lib/auth/types";
+import { adminRoles, canCreateListings } from "@/lib/auth/types";
 import { ensureUserRecord } from "@/lib/auth/user-record";
 import { getCollection } from "@/lib/data/collections";
 import {
@@ -11,7 +12,14 @@ import {
   type SeekerRequestDurationDays,
   type SeekerRequestStatus,
 } from "@/lib/domain";
-import { getSeekerPostFeeRwf, seekerViewTokenFeeRwf } from "@/lib/seeker-requests/pricing";
+import {
+  getFeeSettingsSummary,
+  resolveSeekerPostFeeRwf,
+  resolveSeekerViewTokenFeeRwf,
+} from "@/lib/fee-settings/workflow";
+import { createPaymentRecord } from "@/lib/payments/workflow";
+import { createNotification, notifyUsersByRoles } from "@/lib/notifications/workflow";
+import { getSeekerResponseCountsForRequester } from "@/lib/seeker-requests/responses";
 
 export type BuyerSeekerRequestSummary = {
   id: string;
@@ -25,8 +33,13 @@ export type BuyerSeekerRequestSummary = {
   district?: string;
   durationDays: SeekerRequestDurationDays;
   postedFeeRwf: number;
+  responseCount: number;
+  matchedResponderName?: string;
+  closureNote?: string;
   expiresAt: string;
   createdAt: string;
+  fulfilledAt: string | null;
+  closedAt: string | null;
 };
 
 export type PublicSeekerRequestSummary = {
@@ -52,6 +65,11 @@ export type PublicSeekerRequestDetail = PublicSeekerRequestSummary & {
   contactName: string;
   contactPhone: string;
   sector?: string;
+  matchedResponseId: string | null;
+  matchedResponderName: string | null;
+  closureNote: string | null;
+  fulfilledAt: string | null;
+  closedAt: string | null;
 };
 
 function normalizeTextField(value: unknown) {
@@ -155,7 +173,10 @@ function validateSeekerRequestInput(payload: Record<string, unknown>) {
   };
 }
 
-function serializeBuyerRequest(request: WithId<SeekerRequestDocument>): BuyerSeekerRequestSummary {
+function serializeBuyerRequest(
+  request: WithId<SeekerRequestDocument>,
+  responseCountMap: Map<string, number>,
+): BuyerSeekerRequestSummary {
   return {
     id: request._id.toString(),
     title: request.title,
@@ -168,8 +189,13 @@ function serializeBuyerRequest(request: WithId<SeekerRequestDocument>): BuyerSee
     district: request.district,
     durationDays: request.durationDays,
     postedFeeRwf: request.postedFeeRwf,
+    responseCount: responseCountMap.get(request._id.toString()) ?? 0,
+    matchedResponderName: request.matchedResponderName,
+    closureNote: request.closureNote,
     expiresAt: request.expiresAt.toISOString(),
     createdAt: request.createdAt.toISOString(),
+    fulfilledAt: request.fulfilledAt?.toISOString() ?? null,
+    closedAt: request.closedAt?.toISOString() ?? null,
   };
 }
 
@@ -203,6 +229,11 @@ function serializePublicRequestDetail(request: WithId<SeekerRequestDocument>): P
     contactName: request.contactName,
     contactPhone: request.contactPhone,
     sector: request.sector,
+    matchedResponseId: request.matchedResponseId?.toString() ?? null,
+    matchedResponderName: request.matchedResponderName ?? null,
+    closureNote: request.closureNote ?? null,
+    fulfilledAt: request.fulfilledAt?.toISOString() ?? null,
+    closedAt: request.closedAt?.toISOString() ?? null,
   };
 }
 
@@ -225,10 +256,10 @@ export async function createSeekerRequestForSession(session: AuthSession, payloa
   }
 
   const seekerRequests = await getCollection("seekerRequests");
-  const payments = await getCollection("payments");
   const auditLogs = await getCollection("auditLogs");
   const now = new Date();
-  const postedFeeRwf = getSeekerPostFeeRwf(validation.value.durationDays);
+  const feeSettings = await getFeeSettingsSummary();
+  const postedFeeRwf = resolveSeekerPostFeeRwf(feeSettings, validation.value.durationDays);
   const expiresAt = new Date(now.getTime() + validation.value.durationDays * 24 * 60 * 60 * 1000);
   const requestDocument: Omit<SeekerRequestDocument, "_id"> = {
     requesterUserId: user._id,
@@ -247,23 +278,24 @@ export async function createSeekerRequestForSession(session: AuthSession, payloa
     contactName: user.fullName,
     contactPhone,
     postedFeeRwf,
-    viewTokenFeeRwf: seekerViewTokenFeeRwf,
+    viewTokenFeeRwf: resolveSeekerViewTokenFeeRwf(feeSettings),
     expiresAt,
     createdAt: now,
     updatedAt: now,
   };
   const insertResult = await seekerRequests.insertOne(requestDocument);
 
-  await payments.insertOne({
+  await createPaymentRecord({
     userId: user._id,
+    seekerRequestId: insertResult.insertedId,
     amountRwf: postedFeeRwf,
-    currency: "RWF",
-    provider: "afripay",
     purpose: "seeker_post_fee",
-    status: "paid",
-    reference: `SEEK-${insertResult.insertedId.toString().slice(-6)}-${now.getTime()}`,
-    createdAt: now,
-    updatedAt: now,
+    referencePrefix: "SEEK",
+    metadata: {
+      flow: "prototype_seeker_request_post",
+      category: requestDocument.category,
+      durationDays: requestDocument.durationDays,
+    },
   });
 
   await auditLogs.insertOne({
@@ -280,6 +312,27 @@ export async function createSeekerRequestForSession(session: AuthSession, payloa
     updatedAt: now,
   });
 
+  await createNotification({
+    userId: user._id,
+    kind: "seeker_request_created",
+    severity: "success",
+    title: "Seeker request posted",
+    body: `${requestDocument.title} is now live on the demand board.`,
+    entityType: "seeker_request",
+    entityId: insertResult.insertedId.toString(),
+    link: "/dashboard#notifications",
+  });
+
+  await notifyUsersByRoles(adminRoles, {
+    kind: "seeker_request_created",
+    severity: "info",
+    title: "New seeker request posted",
+    body: `${requestDocument.title} is now visible on the demand board.`,
+    entityType: "seeker_request",
+    entityId: insertResult.insertedId.toString(),
+    link: "/admin#notifications",
+  });
+
   return {
     ok: true as const,
     request: {
@@ -291,15 +344,18 @@ export async function createSeekerRequestForSession(session: AuthSession, payloa
 
 export async function getBuyerSeekerRequestsForUser(requesterUserId: ObjectId): Promise<BuyerSeekerRequestSummary[]> {
   const seekerRequests = await getCollection("seekerRequests");
-  const requests = await seekerRequests
+  const [requests, responseCountMap] = await Promise.all([
+    seekerRequests
     .find({
       requesterUserId,
     })
     .sort({ createdAt: -1 })
     .limit(8)
-    .toArray();
+      .toArray(),
+    getSeekerResponseCountsForRequester(requesterUserId),
+  ]);
 
-  return requests.map(serializeBuyerRequest);
+  return requests.map((request) => serializeBuyerRequest(request, responseCountMap));
 }
 
 export async function getBuyerSeekerRequestsForSession(session: AuthSession): Promise<BuyerSeekerRequestSummary[]> {
@@ -355,4 +411,48 @@ export async function getPublicSeekerRequestDetail(requestId: string) {
   });
 
   return request ? serializePublicRequestDetail(request) : null;
+}
+
+export async function getSeekerRequestDetailForViewer(session: AuthSession | null, requestId: string) {
+  if (!ObjectId.isValid(requestId)) {
+    return null;
+  }
+
+  const seekerRequests = await getCollection("seekerRequests");
+  const seekerRequestUnlocks = await getCollection("seekerRequestUnlocks");
+  const requestObjectId = new ObjectId(requestId);
+  const request = await seekerRequests.findOne({
+    _id: requestObjectId,
+  });
+
+  if (!request) {
+    return null;
+  }
+
+  const isPubliclyVisible = request.status === "active" && request.expiresAt > new Date();
+
+  if (isPubliclyVisible) {
+    return serializePublicRequestDetail(request);
+  }
+
+  if (!session) {
+    return null;
+  }
+
+  const user = await ensureUserRecord(session);
+
+  if (request.requesterUserId.equals(user._id)) {
+    return serializePublicRequestDetail(request);
+  }
+
+  if (!canCreateListings(session.user.role)) {
+    return null;
+  }
+
+  const unlock = await seekerRequestUnlocks.findOne({
+    userId: user._id,
+    seekerRequestId: requestObjectId,
+  });
+
+  return unlock ? serializePublicRequestDetail(request) : null;
 }

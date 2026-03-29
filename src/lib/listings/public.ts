@@ -3,6 +3,7 @@ import { ObjectId, type Filter } from "mongodb";
 import { listingCategories } from "@/lib/domain";
 import { getCollection } from "@/lib/data/collections";
 import type { ListingCategory, ListingDocument } from "@/lib/domain";
+import { getFeeSettingsSummary, resolveListingTokenFeeRwf, type FeeSettingsSummary } from "@/lib/fee-settings/workflow";
 
 export type PublicListingSummary = {
   id: string;
@@ -46,9 +47,10 @@ export type PublicListingDetail = {
   updatedAt: string;
 };
 
-const defaultTokenFeeRwf = 10_000;
-
-function serializeListingSummary(listing: ListingDocument & { _id: ObjectId }): PublicListingSummary {
+function serializeListingSummary(
+  listing: ListingDocument & { _id: ObjectId },
+  feeSettings: FeeSettingsSummary,
+): PublicListingSummary {
   const coverImage = listing.media.find((item) => item.isCover) ?? listing.media[0];
 
   return {
@@ -61,13 +63,18 @@ function serializeListingSummary(listing: ListingDocument & { _id: ObjectId }): 
     district: listing.location.district,
     coverImageUrl: coverImage?.url ?? null,
     tokenFeeEnabled: listing.tokenFeeEnabled,
-    tokenFeeRwf: listing.tokenFeeEnabled ? listing.tokenFeeRwf ?? defaultTokenFeeRwf : undefined,
+    tokenFeeRwf: listing.tokenFeeEnabled
+      ? listing.tokenFeeRwf ?? resolveListingTokenFeeRwf(feeSettings, listing.category, listing.model)
+      : undefined,
     featureCount: listing.features.length,
     updatedAt: listing.updatedAt.toISOString(),
   };
 }
 
-function serializeListingDetail(listing: ListingDocument & { _id: ObjectId }): PublicListingDetail {
+function serializeListingDetail(
+  listing: ListingDocument & { _id: ObjectId },
+  feeSettings: FeeSettingsSummary,
+): PublicListingDetail {
   return {
     id: listing._id.toString(),
     title: listing.title,
@@ -88,7 +95,9 @@ function serializeListingDetail(listing: ListingDocument & { _id: ObjectId }): P
       isCover: item.isCover,
     })),
     tokenFeeEnabled: listing.tokenFeeEnabled,
-    tokenFeeRwf: listing.tokenFeeEnabled ? listing.tokenFeeRwf ?? defaultTokenFeeRwf : undefined,
+    tokenFeeRwf: listing.tokenFeeEnabled
+      ? listing.tokenFeeRwf ?? resolveListingTokenFeeRwf(feeSettings, listing.category, listing.model)
+      : undefined,
     ownerType: listing.ownerType,
     ownerName: listing.ownerContact.fullName,
     ownerPhone: listing.ownerContact.phone,
@@ -104,6 +113,7 @@ export async function getPublicListings({
   category?: string;
 }) {
   const listings = await getCollection("listings");
+  const feeSettings = await getFeeSettingsSummary();
   const normalizedQuery = query?.trim();
   const normalizedCategory = category?.trim();
   const filter: Filter<ListingDocument> = {
@@ -129,7 +139,7 @@ export async function getPublicListings({
     .limit(24)
     .toArray();
 
-  return results.map(serializeListingSummary);
+  return results.map((listing) => serializeListingSummary(listing, feeSettings));
 }
 
 export async function getPublicListingDetail(listingId: string) {
@@ -138,15 +148,12 @@ export async function getPublicListingDetail(listingId: string) {
   }
 
   const listings = await getCollection("listings");
+  const feeSettings = await getFeeSettingsSummary();
   const listing = await listings.findOne({
     _id: new ObjectId(listingId),
     status: "active",
     verificationStatus: "approved",
   });
 
-  return listing ? serializeListingDetail(listing) : null;
-}
-
-export function getDefaultTokenFeeRwf() {
-  return defaultTokenFeeRwf;
+  return listing ? serializeListingDetail(listing, feeSettings) : null;
 }

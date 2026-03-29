@@ -12,10 +12,16 @@ This project is optimized for a low-cost MVP:
 
 - `auth`: user registration, login, role checks
 - `listings`: listing creation, browsing, approval states
+- `listing-lifecycle`: owner-side status transitions after approval, plus buyer/admin visibility for those changes
+- `chat`: listing inquiries, blocked pre-unlock content, and post-unlock reply threads
 - `payments`: AfrIPay checkout and webhook handling
 - `token-unlocks`: immutable unlock records
 - `admin`: verification, fees, penalties, audit visibility
-- `seeker-requests`: anonymized demand-side posts
+- `fee-settings`: admin-controlled fee matrix for listing unlocks and seeker pricing
+- `seeker-requests`: anonymized demand-side posts, owner-side unlocks, and direct seeker responses
+- `seeker-request-lifecycle`: requester-side fulfillment, closure, and matched-response outcome tracking
+- `seeker-request-messaging`: matched-only follow-up conversations after a seeker selects an owner response
+- `notifications`: in-app user alerts for review, unlock, seeker, and inquiry events
 
 ## Data design direction
 
@@ -25,7 +31,11 @@ Collections to start with:
 - `listings`
 - `listingDrafts`
 - `payments`
+- `feeSettings`
 - `tokenUnlocks`
+- `seekerRequestUnlocks`
+- `seekerResponses`
+- `seekerMatchMessages`
 - `auditLogs`
 - `penalties`
 - `chatMessages`
@@ -46,6 +56,13 @@ Collections to start with:
 - `src/lib/formatting/date.ts`: consistent Rwanda-facing date and datetime formatting
 - `src/lib/formatting/text.ts`: shared enum humanization and category labels
 - `src/lib/data/collections.ts`: typed MongoDB collection access and starter indexes
+- `src/lib/fee-settings/workflow.ts`: default fee matrix, Mongo-backed settings retrieval, and fee resolution helpers
+- `src/lib/payments/workflow.ts`: centralized payment record creation and admin payment analytics
+- `src/lib/notifications/workflow.ts`: centralized in-app notification creation, unread counts, and notification center data
+- `src/lib/listings/lifecycle.ts`: shared lifecycle transition rules for listing status updates
+- `src/lib/seeker-requests/responses.ts`: owner response writes, requester response views, and seeker response counts
+- `src/lib/seeker-requests/lifecycle.ts`: requester-side fulfillment and closure rules, plus match outcome notifications
+- `src/lib/seeker-requests/messaging.ts`: matched-only seeker follow-up threads, notifications, and dashboard conversation summaries
 - `src/app/api/uploads/sign/route.ts`: signs direct Cloudinary uploads without exposing API secrets
 
 ## Delivery roadmap

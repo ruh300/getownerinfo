@@ -127,7 +127,7 @@ export function AvailabilityChat({
 
       <p className="mt-4 text-sm leading-6 text-[var(--muted)]">
         {unlocked
-          ? "You have already unlocked this listing, so your follow-up messages can include direct contact details if needed."
+          ? "You have already unlocked this listing, so the thread is now two-way and owner replies will appear here alongside your follow-up messages."
           : "Before unlock, the system blocks phone numbers, emails, direct links, and exact location clues. Ask about availability, price flexibility, and visit timing instead."}
       </p>
 
