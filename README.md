@@ -58,6 +58,7 @@ The initial build favors:
 - `/admin` now shows a live review queue with approve/reject actions and audit logging
 - `/listings` and `/listings/[listingId]` now expose the public marketplace and locked-contact detail view for approved listings
 - `POST /api/listings/[listingId]/unlock` now records the prototype token unlock flow for signed-in users
+- Buyer dashboards now show unlock history, token-fee payment records, and recommended approved listings
 
 ## MongoDB Atlas Note
 

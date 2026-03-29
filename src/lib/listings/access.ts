@@ -28,6 +28,7 @@ export async function unlockListingForSession(session: AuthSession, listingId: s
   const user = await ensureUserRecord(session);
   const listings = await getCollection("listings");
   const tokenUnlocks = await getCollection("tokenUnlocks");
+  const payments = await getCollection("payments");
   const auditLogs = await getCollection("auditLogs");
   const listingObjectId = parseObjectId(listingId);
   const listing = await listings.findOne({
@@ -54,6 +55,7 @@ export async function unlockListingForSession(session: AuthSession, listingId: s
   }
 
   const now = new Date();
+  const unlockAmountRwf = listing.tokenFeeEnabled ? listing.tokenFeeRwf ?? 10_000 : 0;
   await tokenUnlocks.insertOne({
     userId: user._id,
     listingId: listingObjectId,
@@ -63,6 +65,21 @@ export async function unlockListingForSession(session: AuthSession, listingId: s
     updatedAt: now,
   });
 
+  if (unlockAmountRwf > 0) {
+    await payments.insertOne({
+      userId: user._id,
+      listingId: listingObjectId,
+      amountRwf: unlockAmountRwf,
+      currency: "RWF",
+      provider: "afripay",
+      purpose: "token_fee",
+      status: "paid",
+      reference: `TOKEN-${listingObjectId.toString().slice(-6)}-${now.getTime()}`,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
   await auditLogs.insertOne({
     actorUserId: user._id,
     entityType: "token_unlock",
@@ -71,6 +88,7 @@ export async function unlockListingForSession(session: AuthSession, listingId: s
     metadata: {
       listingTitle: listing.title,
       ownerPhone: listing.ownerContact.phone,
+      amountRwf: unlockAmountRwf,
     },
     createdAt: now,
     updatedAt: now,

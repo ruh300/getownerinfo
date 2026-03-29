@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { requireSession } from "@/lib/auth/session";
 import { canAccessAdmin, canCreateListings } from "@/lib/auth/types";
+import { getBuyerWorkspaceData } from "@/lib/dashboard/workspace";
 import { formatRwf } from "@/lib/formatting/currency";
 import { getOwnerWorkspaceData } from "@/lib/listings/workflow";
 
@@ -9,6 +10,7 @@ export default async function DashboardPage() {
   const session = await requireSession();
   const showOwnerWorkspace = canCreateListings(session.user.role);
   let ownerWorkspace: Awaited<ReturnType<typeof getOwnerWorkspaceData>> | null = null;
+  let buyerWorkspace: Awaited<ReturnType<typeof getBuyerWorkspaceData>> | null = null;
   let workspaceError: string | null = null;
 
   if (showOwnerWorkspace) {
@@ -16,6 +18,12 @@ export default async function DashboardPage() {
       ownerWorkspace = await getOwnerWorkspaceData(session);
     } catch (error) {
       workspaceError = error instanceof Error ? error.message : "Could not load your workspace data.";
+    }
+  } else {
+    try {
+      buyerWorkspace = await getBuyerWorkspaceData(session);
+    } catch (error) {
+      workspaceError = error instanceof Error ? error.message : "Could not load your buyer workspace.";
     }
   }
 
@@ -99,7 +107,7 @@ export default async function DashboardPage() {
           <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
             {showOwnerWorkspace
               ? "Owner and manager roles can now save drafts, submit them for review, and track listing status from this dashboard."
-              : "Buyer sessions are protected and ready for the browse, unlock, and chat journey that comes next."}
+              : "Buyer sessions now track unlock history, prototype token-fee payments, and recommended verified listings."}
           </p>
         </article>
 
@@ -241,6 +249,163 @@ export default async function DashboardPage() {
                     <p className="mt-4 text-sm leading-6 text-[var(--muted)]">
                       Submitted {new Intl.DateTimeFormat("en-RW", { dateStyle: "medium", timeStyle: "short" }).format(new Date(listing.submittedAt))}
                     </p>
+                  </article>
+                ))
+              )}
+            </section>
+          </section>
+        </>
+      ) : null}
+
+      {buyerWorkspace ? (
+        <>
+          <section className="grid gap-6 md:grid-cols-4">
+            <article className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
+              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Unlocks</p>
+              <h2 className="mt-3 font-[var(--font-display)] text-4xl">{buyerWorkspace.stats.unlockCount}</h2>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Listings you have already unlocked.</p>
+            </article>
+            <article className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
+              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Spent</p>
+              <h2 className="mt-3 font-[var(--font-display)] text-4xl">{formatRwf(buyerWorkspace.stats.totalSpentRwf)}</h2>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Prototype token-fee payments recorded in your account.</p>
+            </article>
+            <article className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
+              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Active contacts</p>
+              <h2 className="mt-3 font-[var(--font-display)] text-4xl">{buyerWorkspace.stats.activeUnlockCount}</h2>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Unlocked listings that are still active right now.</p>
+            </article>
+            <article className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
+              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Payments</p>
+              <h2 className="mt-3 font-[var(--font-display)] text-4xl">{buyerWorkspace.stats.paymentCount}</h2>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Recorded token-fee payment events.</p>
+            </article>
+          </section>
+
+          <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+            <section className="space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Unlock history</p>
+                  <h2 className="mt-2 font-[var(--font-display)] text-3xl">Recently unlocked listings</h2>
+                </div>
+                <Link
+                  href="/listings"
+                  className="rounded-full bg-[var(--primary)] px-4 py-2 text-sm font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-[var(--primary-light)]"
+                >
+                  Browse more
+                </Link>
+              </div>
+
+              {buyerWorkspace.unlockedListings.length === 0 ? (
+                <div className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 text-sm leading-6 text-[var(--muted)] shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
+                  You have not unlocked any listings yet. Open a verified listing and use the prototype unlock flow to create your first buyer record.
+                </div>
+              ) : (
+                buyerWorkspace.unlockedListings.map((listing) => (
+                  <article
+                    key={listing.listingId}
+                    className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_12px_32px_rgba(0,0,0,0.06)]"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">
+                          {listing.category.replaceAll("_", " ")}
+                        </p>
+                        <h3 className="mt-2 font-[var(--font-display)] text-2xl">{listing.title}</h3>
+                        <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+                          {listing.approximateAreaLabel} · {listing.ownerName} · {listing.ownerPhone}
+                        </p>
+                      </div>
+                      <div className="rounded-[20px] border border-[var(--border)] bg-[var(--surface-alt)] px-4 py-3 text-sm leading-6 text-[var(--foreground)]">
+                        <p>{formatRwf(listing.priceRwf)}</p>
+                        <p>{formatRwf(listing.amountPaidRwf)} paid</p>
+                        <p>{listing.stillActive ? "Still active" : "No longer active"}</p>
+                      </div>
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <Link
+                        href={`/listings/${listing.listingId}`}
+                        className="rounded-full border border-[var(--primary)] px-4 py-2 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--primary)] transition hover:bg-[var(--surface-alt)]"
+                      >
+                        Reopen listing
+                      </Link>
+                    </div>
+                    <p className="mt-4 text-sm leading-6 text-[var(--muted)]">
+                      Unlocked {new Intl.DateTimeFormat("en-RW", { dateStyle: "medium", timeStyle: "short" }).format(new Date(listing.unlockedAt))}
+                    </p>
+                  </article>
+                ))
+              )}
+            </section>
+
+            <section className="space-y-4">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Payment ledger</p>
+                <h2 className="mt-2 font-[var(--font-display)] text-3xl">Recent token-fee activity</h2>
+              </div>
+
+              {buyerWorkspace.recentPayments.length === 0 ? (
+                <div className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 text-sm leading-6 text-[var(--muted)] shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
+                  No token-fee payments have been recorded yet.
+                </div>
+              ) : (
+                buyerWorkspace.recentPayments.map((payment) => (
+                  <article
+                    key={payment.id}
+                    className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_12px_32px_rgba(0,0,0,0.06)]"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">
+                          {payment.purpose.replaceAll("_", " ")}
+                        </p>
+                        <h3 className="mt-2 font-semibold text-[var(--foreground)]">{formatRwf(payment.amountRwf)}</h3>
+                      </div>
+                      <div className="rounded-full border border-[var(--border)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                        {payment.status}
+                      </div>
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-[var(--muted)]">{payment.reference}</p>
+                    <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+                      {new Intl.DateTimeFormat("en-RW", { dateStyle: "medium", timeStyle: "short" }).format(new Date(payment.createdAt))}
+                    </p>
+                  </article>
+                ))
+              )}
+
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Recommended next</p>
+                <h2 className="mt-2 font-[var(--font-display)] text-3xl">Verified listings to explore</h2>
+              </div>
+
+              {buyerWorkspace.recommendedListings.length === 0 ? (
+                <div className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 text-sm leading-6 text-[var(--muted)] shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
+                  Once more listings are approved, recommendations will appear here.
+                </div>
+              ) : (
+                buyerWorkspace.recommendedListings.map((listing) => (
+                  <article
+                    key={listing.id}
+                    className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_12px_32px_rgba(0,0,0,0.06)]"
+                  >
+                    <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">
+                      {listing.category.replaceAll("_", " ")}
+                    </p>
+                    <h3 className="mt-2 font-semibold text-[var(--foreground)]">{listing.title}</h3>
+                    <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+                      {listing.approximateAreaLabel}
+                      {listing.district ? `, ${listing.district}` : ""}
+                    </p>
+                    <div className="mt-4 flex items-center justify-between gap-3">
+                      <span className="text-sm font-semibold text-[var(--foreground)]">{formatRwf(listing.priceRwf)}</span>
+                      <Link
+                        href={`/listings/${listing.id}`}
+                        className="rounded-full border border-[var(--primary)] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--primary)] transition hover:bg-[var(--surface-alt)]"
+                      >
+                        View
+                      </Link>
+                    </div>
                   </article>
                 ))
               )}

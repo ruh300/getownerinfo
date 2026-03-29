@@ -37,6 +37,7 @@ export async function ensureCoreIndexes() {
   const users = await getCollection("users");
   const listings = await getCollection("listings");
   const listingDrafts = await getCollection("listingDrafts");
+  const payments = await getCollection("payments");
   const tokenUnlocks = await getCollection("tokenUnlocks");
   const auditLogs = await getCollection("auditLogs");
 
@@ -50,6 +51,8 @@ export async function ensureCoreIndexes() {
     listingDrafts.createIndex({ "ownerContact.phone": 1, createdAt: -1 }),
     listingDrafts.createIndex({ ownerUserId: 1, updatedAt: -1 }),
     listingDrafts.createIndex({ category: 1, status: 1, createdAt: -1 }),
+    payments.createIndex({ userId: 1, purpose: 1, createdAt: -1 }),
+    payments.createIndex({ reference: 1 }, { unique: true }),
     tokenUnlocks.createIndex({ userId: 1, listingId: 1, unlockedAt: -1 }),
     auditLogs.createIndex({ entityType: 1, entityId: 1, createdAt: -1 }),
   ]);
