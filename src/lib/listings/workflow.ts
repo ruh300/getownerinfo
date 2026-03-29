@@ -2,6 +2,7 @@ import { ObjectId, type WithId } from "mongodb";
 
 import type { AuthSession } from "@/lib/auth/types";
 import { ensureUserRecord } from "@/lib/auth/user-record";
+import { getOwnerInquiryFeedForUser, type OwnerInquirySummary } from "@/lib/chat/workflow";
 import { getCollection } from "@/lib/data/collections";
 import type { ListingDocument, ListingDraftDocument, ListingModel } from "@/lib/domain";
 import { validateListingDraftInput } from "@/lib/listings/drafts";
@@ -44,6 +45,7 @@ export type OwnerWorkspaceData = {
   };
   drafts: OwnerDraftSummary[];
   listings: OwnerListingSummary[];
+  inquiries: OwnerInquirySummary[];
 };
 
 export type AdminReviewSummary = {
@@ -335,20 +337,23 @@ export async function getOwnerWorkspaceData(session: AuthSession): Promise<Owner
   const user = await ensureUserRecord(session);
   const listingDrafts = await getCollection("listingDrafts");
   const listings = await getCollection("listings");
-  const drafts = await listingDrafts
-    .find({
-      ownerUserId: user._id,
-    })
-    .sort({ updatedAt: -1 })
-    .limit(8)
-    .toArray();
-  const ownedListings = await listings
-    .find({
-      ownerUserId: user._id,
-    })
-    .sort({ updatedAt: -1 })
-    .limit(8)
-    .toArray();
+  const [drafts, ownedListings, inquiries] = await Promise.all([
+    listingDrafts
+      .find({
+        ownerUserId: user._id,
+      })
+      .sort({ updatedAt: -1 })
+      .limit(8)
+      .toArray(),
+    listings
+      .find({
+        ownerUserId: user._id,
+      })
+      .sort({ updatedAt: -1 })
+      .limit(8)
+      .toArray(),
+    getOwnerInquiryFeedForUser(user._id),
+  ]);
 
   return {
     stats: {
@@ -359,6 +364,7 @@ export async function getOwnerWorkspaceData(session: AuthSession): Promise<Owner
     },
     drafts: drafts.map(serializeDraft),
     listings: ownedListings.map(serializeListing),
+    inquiries,
   };
 }
 

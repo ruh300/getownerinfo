@@ -41,12 +41,20 @@ export default async function DashboardPage() {
             </p>
             <div className="flex flex-wrap gap-3">
               {canCreateListings(session.user.role) ? (
-                <Link
-                  href="/listings/new"
-                  className="rounded-full bg-[var(--primary)] px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-[var(--primary-light)]"
-                >
-                  Start new listing
-                </Link>
+                <>
+                  <Link
+                    href="/listings/new"
+                    className="rounded-full bg-[var(--primary)] px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-[var(--primary-light)]"
+                  >
+                    Start new listing
+                  </Link>
+                  <Link
+                    href="/seeker-requests"
+                    className="rounded-full border border-[var(--accent)] px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--accent)] transition hover:bg-[rgba(200,134,10,0.08)]"
+                  >
+                    Explore seeker demand
+                  </Link>
+                </>
               ) : (
                 <Link
                   href="/listings"
@@ -106,8 +114,8 @@ export default async function DashboardPage() {
           <h2 className="mt-3 font-[var(--font-display)] text-2xl">{showOwnerWorkspace ? "Owner-ready workspace" : "Buyer-ready workspace"}</h2>
           <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
             {showOwnerWorkspace
-              ? "Owner and manager roles can now save drafts, submit them for review, and track listing status from this dashboard."
-              : "Buyer sessions now track unlock history, prototype token-fee payments, and recommended verified listings."}
+              ? "Owner and manager roles can now save drafts, submit them for review, track listing status, and monitor incoming buyer inquiries."
+              : "Buyer sessions now track unlock history, prototype token-fee payments, seeker requests, and recommended verified listings."}
           </p>
         </article>
 
@@ -254,12 +262,68 @@ export default async function DashboardPage() {
               )}
             </section>
           </section>
+
+          <section className="space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Buyer inquiries</p>
+                <h2 className="mt-2 font-[var(--font-display)] text-3xl">Recent pre-unlock questions</h2>
+              </div>
+              <Link
+                href="/listings"
+                className="rounded-full border border-[var(--primary)] px-4 py-2 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--primary)] transition hover:bg-[var(--surface-alt)]"
+              >
+                View marketplace
+              </Link>
+            </div>
+
+            {ownerWorkspace.inquiries.length === 0 ? (
+              <div className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 text-sm leading-6 text-[var(--muted)] shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
+                No buyer inquiries yet. When buyers ask clean pre-unlock questions from a listing page, they will appear here.
+              </div>
+            ) : (
+              <div className="grid gap-4 xl:grid-cols-2">
+                {ownerWorkspace.inquiries.map((inquiry) => (
+                  <article
+                    key={inquiry.id}
+                    className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_12px_32px_rgba(0,0,0,0.06)]"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">
+                          {inquiry.listingCategory.replaceAll("_", " ")}
+                        </p>
+                        <h3 className="mt-2 font-[var(--font-display)] text-2xl">{inquiry.listingTitle}</h3>
+                      </div>
+                      <Link
+                        href={`/listings/${inquiry.listingId}`}
+                        className="rounded-full border border-[var(--border)] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--foreground)] transition hover:bg-[var(--surface-alt)]"
+                      >
+                        Open listing
+                      </Link>
+                    </div>
+                    <div className="mt-4 rounded-2xl bg-[var(--surface-alt)] px-4 py-3 text-sm leading-6 text-[var(--muted)]">
+                      <p className="font-semibold text-[var(--foreground)]">Buyer</p>
+                      <p>{inquiry.buyerName}</p>
+                    </div>
+                    <p className="mt-4 text-sm leading-6 text-[var(--foreground)]">{inquiry.body}</p>
+                    <p className="mt-4 text-sm leading-6 text-[var(--muted)]">
+                      Received{" "}
+                      {new Intl.DateTimeFormat("en-RW", { dateStyle: "medium", timeStyle: "short" }).format(
+                        new Date(inquiry.createdAt),
+                      )}
+                    </p>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
         </>
       ) : null}
 
       {buyerWorkspace ? (
         <>
-          <section className="grid gap-6 md:grid-cols-4">
+          <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-6">
             <article className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
               <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Unlocks</p>
               <h2 className="mt-3 font-[var(--font-display)] text-4xl">{buyerWorkspace.stats.unlockCount}</h2>
@@ -279,6 +343,16 @@ export default async function DashboardPage() {
               <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Payments</p>
               <h2 className="mt-3 font-[var(--font-display)] text-4xl">{buyerWorkspace.stats.paymentCount}</h2>
               <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Recorded token-fee payment events.</p>
+            </article>
+            <article className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
+              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Seeker posts</p>
+              <h2 className="mt-3 font-[var(--font-display)] text-4xl">{buyerWorkspace.stats.seekerRequestCount}</h2>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Requests you have published to the demand board.</p>
+            </article>
+            <article className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
+              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Live demand</p>
+              <h2 className="mt-3 font-[var(--font-display)] text-4xl">{buyerWorkspace.stats.activeSeekerRequestCount}</h2>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Active seeker requests still visible publicly.</p>
             </article>
           </section>
 
@@ -410,6 +484,73 @@ export default async function DashboardPage() {
                 ))
               )}
             </section>
+          </section>
+
+          <section className="space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Seeker requests</p>
+                <h2 className="mt-2 font-[var(--font-display)] text-3xl">Your live demand posts</h2>
+              </div>
+              <Link
+                href="/seeker-requests/new"
+                className="rounded-full bg-[var(--primary)] px-4 py-2 text-sm font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-[var(--primary-light)]"
+              >
+                New request
+              </Link>
+            </div>
+
+            {buyerWorkspace.seekerRequests.length === 0 ? (
+              <div className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 text-sm leading-6 text-[var(--muted)] shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
+                No seeker requests yet. Post one when the right listing is missing and you want owners to come to you.
+              </div>
+            ) : (
+              <div className="grid gap-4 xl:grid-cols-2">
+                {buyerWorkspace.seekerRequests.map((request) => (
+                  <article
+                    key={request.id}
+                    className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_12px_32px_rgba(0,0,0,0.06)]"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">
+                          {request.category.replaceAll("_", " ")}
+                        </p>
+                        <h3 className="mt-2 font-[var(--font-display)] text-2xl">{request.title}</h3>
+                      </div>
+                      <div className="rounded-full border border-[var(--border)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                        {request.status}
+                      </div>
+                    </div>
+                    <div className="mt-4 rounded-2xl bg-[var(--surface-alt)] px-4 py-3 text-sm leading-6 text-[var(--muted)]">
+                      <p className="font-semibold text-[var(--foreground)]">Budget</p>
+                      <p>
+                        {formatRwf(request.budgetMinRwf)} - {formatRwf(request.budgetMaxRwf)}
+                      </p>
+                      <p>
+                        {request.quantityLabel} in {request.approximateAreaLabel}
+                        {request.district ? `, ${request.district}` : ""}
+                      </p>
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-3 text-sm leading-6 text-[var(--muted)]">
+                      <span>{formatRwf(request.postedFeeRwf)} posted</span>
+                      <span>{request.durationDays} day window</span>
+                    </div>
+                    <p className="mt-4 text-sm leading-6 text-[var(--muted)]">
+                      Expires {new Intl.DateTimeFormat("en-RW", { dateStyle: "medium" }).format(new Date(request.expiresAt))}
+                    </p>
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <Link
+                        href={`/seeker-requests/${request.id}`}
+                        className="rounded-full border border-[var(--primary)] px-4 py-2 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--primary)] transition hover:bg-[var(--surface-alt)]"
+                      >
+                        View public request
+                      </Link>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
           </section>
         </>
       ) : null}

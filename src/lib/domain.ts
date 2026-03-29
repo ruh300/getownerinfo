@@ -37,6 +37,12 @@ export type ListingStatus = (typeof listingStatuses)[number];
 export const verificationStatuses = ["pending", "approved", "rejected"] as const;
 export type VerificationStatus = (typeof verificationStatuses)[number];
 
+export const seekerRequestStatuses = ["active", "fulfilled", "closed", "expired"] as const;
+export type SeekerRequestStatus = (typeof seekerRequestStatuses)[number];
+
+export const seekerRequestDurations = [7, 14, 30] as const;
+export type SeekerRequestDurationDays = (typeof seekerRequestDurations)[number];
+
 export type TimestampFields = {
   createdAt: Date;
   updatedAt: Date;
@@ -164,12 +170,36 @@ export type ListingDraftDocument = BaseDocument & {
 export type PaymentDocument = BaseDocument & {
   userId: ObjectId;
   listingId?: ObjectId;
+  seekerRequestId?: ObjectId;
   amountRwf: number;
   currency: "RWF";
   provider: "afripay";
-  purpose: "listing_fee" | "token_fee" | "commission" | "penalty";
+  purpose: "listing_fee" | "token_fee" | "commission" | "penalty" | "seeker_post_fee" | "seeker_view_token";
   status: "pending" | "paid" | "failed" | "cancelled";
   reference: string;
+};
+
+export type SeekerRequestDocument = BaseDocument & {
+  requesterUserId: ObjectId;
+  category: ListingCategory;
+  title: string;
+  details: string;
+  budgetMinRwf: number;
+  budgetMaxRwf: number;
+  quantityLabel: string;
+  preferredContactTime: string;
+  status: SeekerRequestStatus;
+  durationDays: SeekerRequestDurationDays;
+  approximateAreaLabel: string;
+  district?: string;
+  sector?: string;
+  contactName: string;
+  contactPhone: string;
+  postedFeeRwf: number;
+  viewTokenFeeRwf: number;
+  expiresAt: Date;
+  fulfilledAt?: Date;
+  closedAt?: Date;
 };
 
 export type TokenUnlockDocument = BaseDocument & {
@@ -180,9 +210,30 @@ export type TokenUnlockDocument = BaseDocument & {
   sessionId?: string;
 };
 
+export type SeekerRequestUnlockDocument = BaseDocument & {
+  userId: ObjectId;
+  requesterUserId: ObjectId;
+  seekerRequestId: ObjectId;
+  unlockedAt: Date;
+  fieldsUnlocked: Array<"seekerName" | "seekerPhone" | "preferredContactTime" | "fullDetails">;
+};
+
+export type BlockedContentType = "phone" | "email" | "link" | "location" | "id_number";
+
+export type ChatMessageDocument = BaseDocument & {
+  listingId: ObjectId;
+  ownerUserId: ObjectId;
+  senderUserId: ObjectId;
+  senderRole: UserRole;
+  senderName: string;
+  body: string;
+  status: "sent" | "blocked";
+  blockedContentTypes?: BlockedContentType[];
+};
+
 export type AuditLogDocument = BaseDocument & {
   actorUserId?: ObjectId;
-  entityType: "listing" | "payment" | "token_unlock" | "penalty" | "user";
+  entityType: "listing" | "payment" | "token_unlock" | "penalty" | "user" | "chat_message" | "seeker_request";
   entityId: string;
   action: string;
   metadata?: Record<string, unknown>;

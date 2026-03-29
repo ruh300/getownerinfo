@@ -5,6 +5,7 @@ import { ensureUserRecord } from "@/lib/auth/user-record";
 import { getCollection } from "@/lib/data/collections";
 import type { ListingDocument, PaymentDocument } from "@/lib/domain";
 import { getPublicListings, type PublicListingSummary } from "@/lib/listings/public";
+import { getBuyerSeekerRequestsForUser, type BuyerSeekerRequestSummary } from "@/lib/seeker-requests/workflow";
 
 export type BuyerUnlockSummary = {
   listingId: string;
@@ -35,10 +36,13 @@ export type BuyerWorkspaceData = {
     totalSpentRwf: number;
     activeUnlockCount: number;
     paymentCount: number;
+    seekerRequestCount: number;
+    activeSeekerRequestCount: number;
   };
   unlockedListings: BuyerUnlockSummary[];
   recentPayments: BuyerPaymentSummary[];
   recommendedListings: PublicListingSummary[];
+  seekerRequests: BuyerSeekerRequestSummary[];
 };
 
 function serializePayment(payment: WithId<PaymentDocument>): BuyerPaymentSummary {
@@ -58,6 +62,7 @@ export async function getBuyerWorkspaceData(session: AuthSession): Promise<Buyer
   const tokenUnlocks = await getCollection("tokenUnlocks");
   const listings = await getCollection("listings");
   const payments = await getCollection("payments");
+  const seekerRequests = await getCollection("seekerRequests");
   const unlockRecords = await tokenUnlocks
     .find({
       userId: user._id,
@@ -109,6 +114,17 @@ export async function getBuyerWorkspaceData(session: AuthSession): Promise<Buyer
     totalSpentRwf: 0,
     paymentCount: 0,
   };
+  const [buyerSeekerRequests, seekerRequestCount, activeSeekerRequestCount] = await Promise.all([
+    getBuyerSeekerRequestsForUser(user._id),
+    seekerRequests.countDocuments({
+      requesterUserId: user._id,
+    }),
+    seekerRequests.countDocuments({
+      requesterUserId: user._id,
+      status: "active",
+      expiresAt: { $gt: new Date() },
+    }),
+  ]);
 
   const unlockedListingSummaries = unlockRecords
     .map((unlock) => {
@@ -143,9 +159,12 @@ export async function getBuyerWorkspaceData(session: AuthSession): Promise<Buyer
       totalSpentRwf: totals.totalSpentRwf,
       activeUnlockCount: unlockedListingSummaries.filter((listing) => listing.stillActive).length,
       paymentCount: totals.paymentCount,
+      seekerRequestCount,
+      activeSeekerRequestCount,
     },
     unlockedListings: unlockedListingSummaries,
     recentPayments: recentPayments.map(serializePayment),
     recommendedListings,
+    seekerRequests: buyerSeekerRequests,
   };
 }

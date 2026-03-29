@@ -8,10 +8,10 @@ const stackItems = [
 ];
 
 const nextSteps = [
-  "Set up MongoDB models and shared business-rule helpers.",
-  "Add role-aware auth for buyer, owner, admin, and manager flows.",
-  "Build the listing creation wizard around Model A and Model B eligibility.",
-  "Implement signed Cloudinary uploads for public images and private documents.",
+  "Wire real AfrIPay orchestration for listing, token, and seeker fees.",
+  "Expand seeker requests into owner unlock and match-notification flows.",
+  "Add penalties, notifications, and richer admin reporting.",
+  "Harden production auth, moderation, and deployment settings.",
 ];
 
 export default function Home() {
@@ -44,16 +44,22 @@ export default function Home() {
                 Browse Listings
               </Link>
               <Link
+                href="/seeker-requests"
+                className="rounded-full border border-[var(--primary)] px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--primary)] transition hover:bg-[var(--surface-alt)]"
+              >
+                Browse Seeker Requests
+              </Link>
+              <Link
                 href="/listings/new"
                 className="rounded-full bg-[var(--primary)] px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-[var(--primary-light)]"
               >
                 Start Listing Draft
               </Link>
               <Link
-                href="/api/listings/eligibility?category=real_estate_rent&units=1&priceRwf=1500000"
-                className="rounded-full border border-[var(--primary)] px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--primary)] transition hover:bg-[var(--surface-alt)]"
+                href="/seeker-requests/new"
+                className="rounded-full bg-[var(--accent)] px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-[#d9971d]"
               >
-                View Rule Engine
+                Post Seeker Request
               </Link>
             </div>
             <div className="flex flex-wrap gap-3">
@@ -93,7 +99,7 @@ export default function Home() {
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Data</p>
           <h2 className="mt-3 font-[var(--font-display)] text-2xl">MongoDB Atlas Free</h2>
           <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
-            Start with listings, users, token unlocks, payments, and audit logs as focused collections. Keep
+            Start with listings, seeker requests, users, token unlocks, payments, and audit logs as focused collections. Keep
             immutable records append-only from day one.
           </p>
         </article>

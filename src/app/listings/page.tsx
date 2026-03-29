@@ -44,6 +44,20 @@ export default async function ListingsPage({
             <p className="max-w-3xl text-base leading-7 text-[var(--muted)]">
               Only admin-approved listings appear here. Buyers see photos, pricing, features, and approximate location first, then pay a token only when they are ready for direct owner access.
             </p>
+            <div className="flex flex-wrap gap-3">
+              <Link
+                href="/seeker-requests"
+                className="rounded-full border border-[var(--primary)] px-4 py-2 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--primary)] transition hover:bg-[var(--surface-alt)]"
+              >
+                See seeker demand
+              </Link>
+              <Link
+                href="/seeker-requests/new"
+                className="rounded-full border border-[var(--accent)] px-4 py-2 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--accent)] transition hover:bg-[rgba(200,134,10,0.08)]"
+              >
+                Post request
+              </Link>
+            </div>
           </div>
           <div className="rounded-[26px] border border-[rgba(26,77,46,0.12)] bg-[linear-gradient(180deg,rgba(26,77,46,0.98),rgba(20,92,56,1))] p-6 text-white">
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[rgba(255,255,255,0.72)]">Marketplace status</p>

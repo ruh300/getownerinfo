@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { authCookieName } from "@/lib/auth/constants";
 
-const protectedPrefixes = ["/dashboard", "/admin", "/listings/new"];
+const protectedPrefixes = ["/dashboard", "/admin", "/listings/new", "/seeker-requests/new"];
 
 function isProtectedPath(pathname: string) {
   return protectedPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
@@ -29,5 +29,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/admin/:path*", "/listings/new/:path*"],
+  matcher: ["/dashboard/:path*", "/admin/:path*", "/listings/new/:path*", "/seeker-requests/new/:path*"],
 };

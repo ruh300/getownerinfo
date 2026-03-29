@@ -38,11 +38,11 @@ The initial build favors:
 
 ## Immediate Next Steps
 
-1. Set up MongoDB connection utilities and shared types
-2. Add authentication and role-aware layouts
-3. Build the listing creation wizard
-4. Add Cloudinary signed upload support
-5. Implement admin approval and token unlock flows
+1. Replace the prototype token unlock with real AfrIPay payment orchestration
+2. Add seeker requests and structured buyer demand posts
+3. Expand owner inbox from read-only inquiries to full two-way moderated messaging
+4. Add notifications, penalties, and audit reporting flows
+5. Harden production auth, payment, and deployment settings before launch
 
 ## Current Integration Status
 
@@ -59,6 +59,13 @@ The initial build favors:
 - `/listings` and `/listings/[listingId]` now expose the public marketplace and locked-contact detail view for approved listings
 - `POST /api/listings/[listingId]/unlock` now records the prototype token unlock flow for signed-in users
 - Buyer dashboards now show unlock history, token-fee payment records, and recommended approved listings
+- `GET` and `POST /api/listings/[listingId]/messages` now support pre-unlock buyer inquiries with blocked contact-sharing rules and audit logging
+- Owner dashboards now surface recent buyer inquiries for approved listings
+- `POST /api/seeker-requests` now records anonymized buyer demand posts with a prototype seeker posting fee
+- `/seeker-requests` and `/seeker-requests/new` now expose the public seeker board and protected buyer request form
+- Buyer dashboards now include live seeker request history and active seeker counts
+- `POST /api/seeker-requests/[requestId]/unlock` now records prototype owner-side seeker contact unlocks with payment and audit logs
+- `/seeker-requests/[requestId]` now exposes a detail page with locked seeker contact fields and owner-side unlock flow
 
 ## MongoDB Atlas Note
 
@@ -72,8 +79,11 @@ If Cloudinary works but MongoDB does not, check Atlas before changing code:
 
 - `/api/status`
 - `/api/auth/session`
+- `/api/listings/[listingId]/messages`
 - `/api/listings/[listingId]/unlock`
 - `/api/listings/eligibility?category=real_estate_rent&units=1&priceRwf=1500000`
+- `/api/seeker-requests`
+- `/api/seeker-requests/[requestId]/unlock`
 - `/api/uploads/sign`
 - `/sign-in`
 - `/dashboard`
@@ -81,3 +91,6 @@ If Cloudinary works but MongoDB does not, check Atlas before changing code:
 - `/listings`
 - `/listings/[listingId]`
 - `/listings/new`
+- `/seeker-requests`
+- `/seeker-requests/[requestId]`
+- `/seeker-requests/new`

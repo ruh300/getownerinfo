@@ -26,11 +26,19 @@ export function SiteHeader({ session }: { session: AuthSession | null }) {
           <Link href="/listings" className="rounded-full px-3 py-2 transition hover:bg-[var(--surface-alt)] hover:text-[var(--foreground)]">
             Listings
           </Link>
+          <Link href="/seeker-requests" className="rounded-full px-3 py-2 transition hover:bg-[var(--surface-alt)] hover:text-[var(--foreground)]">
+            Seeker Requests
+          </Link>
           {session ? (
             <>
               <Link href="/dashboard" className="rounded-full px-3 py-2 transition hover:bg-[var(--surface-alt)] hover:text-[var(--foreground)]">
                 Dashboard
               </Link>
+              {role === "buyer" ? (
+                <Link href="/seeker-requests/new" className="rounded-full px-3 py-2 transition hover:bg-[var(--surface-alt)] hover:text-[var(--foreground)]">
+                  New request
+                </Link>
+              ) : null}
               {role && canCreateListings(role) ? (
                 <Link href="/listings/new" className="rounded-full px-3 py-2 transition hover:bg-[var(--surface-alt)] hover:text-[var(--foreground)]">
                   New listing
