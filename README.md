@@ -27,6 +27,7 @@ The initial build favors:
 - `src/app`: App Router pages and route handlers
 - `src/lib`: shared server utilities for env, database, uploads, and business rules
 - `docs`: architecture notes and MVP planning
+- `docs/engineering-roadmap.md`: prioritized senior-level completion plan and launch blockers
 - `.env.example`: environment variables for local setup
 
 ## Local Development
@@ -35,14 +36,15 @@ The initial build favors:
 2. Install dependencies with `npm install`
 3. Start the app with `npm run dev`
 4. Check `GET /api/status` to confirm MongoDB and Cloudinary are connected
+5. Run `npm run verify` before pushing to catch lint and build regressions together
 
 ## Immediate Next Steps
 
-1. Replace the prototype token unlock with real AfrIPay payment orchestration
-2. Add seeker requests and structured buyer demand posts
-3. Expand owner inbox from read-only inquiries to full two-way moderated messaging
-4. Add notifications, penalties, and audit reporting flows
-5. Harden production auth, payment, and deployment settings before launch
+1. Replace prototype payment records with real AfrIPay checkout, callback, and webhook orchestration
+2. Expand inquiry messaging into a moderated two-way owner and buyer conversation flow
+3. Add notifications, penalties, and admin audit reporting views
+4. Harden auth, rate limiting, and deployment configuration for production
+5. Complete operational polish from `docs/engineering-roadmap.md` before launch
 
 ## Current Integration Status
 
@@ -56,6 +58,7 @@ The initial build favors:
 - `/sign-in`, `/dashboard`, and `/admin` now provide a protected workspace using a signed session cookie
 - `/listings/new` now includes browser autosave, Cloudinary uploads, persistent draft save/update, and draft submission for admin review
 - `/admin` now shows a live review queue with approve/reject actions and audit logging
+- `/admin` now also surfaces recent audit activity so operations can review unlocks, seeker posts, blocked messages, and review decisions in one place
 - `/listings` and `/listings/[listingId]` now expose the public marketplace and locked-contact detail view for approved listings
 - `POST /api/listings/[listingId]/unlock` now records the prototype token unlock flow for signed-in users
 - Buyer dashboards now show unlock history, token-fee payment records, and recommended approved listings
@@ -66,6 +69,7 @@ The initial build favors:
 - Buyer dashboards now include live seeker request history and active seeker counts
 - `POST /api/seeker-requests/[requestId]/unlock` now records prototype owner-side seeker contact unlocks with payment and audit logs
 - `/seeker-requests/[requestId]` now exposes a detail page with locked seeker contact fields and owner-side unlock flow
+- `docs/engineering-roadmap.md` now tracks the remaining production work in priority order
 
 ## MongoDB Atlas Note
 

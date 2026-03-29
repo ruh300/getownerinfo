@@ -1,4 +1,5 @@
 type RequiredServerEnv = {
+  AUTH_SESSION_SECRET: string;
   MONGODB_URI: string;
   MONGODB_DB: string;
   CLOUDINARY_CLOUD_NAME: string;
@@ -29,6 +30,7 @@ export function getServerEnv(): ServerEnv {
 
   cachedEnv = {
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? null,
+    AUTH_SESSION_SECRET: getRequiredEnv("AUTH_SESSION_SECRET"),
     MONGODB_URI: getRequiredEnv("MONGODB_URI"),
     MONGODB_DB: getRequiredEnv("MONGODB_DB"),
     CLOUDINARY_CLOUD_NAME: getRequiredEnv("CLOUDINARY_CLOUD_NAME"),

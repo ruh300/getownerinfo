@@ -43,8 +43,14 @@ Collections to start with:
 
 - `src/lib/listings/eligibility.ts`: central Model A/B eligibility engine
 - `src/lib/formatting/currency.ts`: Rwf formatting helper for consistent explanations
+- `src/lib/formatting/date.ts`: consistent Rwanda-facing date and datetime formatting
+- `src/lib/formatting/text.ts`: shared enum humanization and category labels
 - `src/lib/data/collections.ts`: typed MongoDB collection access and starter indexes
 - `src/app/api/uploads/sign/route.ts`: signs direct Cloudinary uploads without exposing API secrets
+
+## Delivery roadmap
+
+- `docs/engineering-roadmap.md`: prioritized execution plan covering launch blockers, workflow completion, governance, polish, and developer quality
 
 ## Environment-backed integrations
 

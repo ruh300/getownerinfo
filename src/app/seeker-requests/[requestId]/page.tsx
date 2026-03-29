@@ -5,6 +5,8 @@ import { UnlockSeekerContactPanel } from "@/components/seeker-requests/unlock-se
 import { getCurrentSession } from "@/lib/auth/session";
 import { canCreateListings } from "@/lib/auth/types";
 import { formatRwf } from "@/lib/formatting/currency";
+import { formatDate } from "@/lib/formatting/date";
+import { getCategoryLabel } from "@/lib/formatting/text";
 import { hasSeekerRequestUnlockForSession } from "@/lib/seeker-requests/access";
 import { getPublicSeekerRequestDetail } from "@/lib/seeker-requests/workflow";
 
@@ -35,7 +37,7 @@ export default async function SeekerRequestDetailPage({
             Back to seeker board
           </Link>
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
-            {request.category.replaceAll("_", " ")}
+            {getCategoryLabel(request.category)}
           </p>
           <h1 className="font-[var(--font-display)] text-4xl leading-tight md:text-5xl">{request.title}</h1>
           <p className="max-w-3xl text-base leading-7 text-[var(--muted)]">
@@ -74,7 +76,7 @@ export default async function SeekerRequestDetailPage({
               </div>
               <div className="rounded-2xl bg-[var(--surface-alt)] px-4 py-3 text-sm leading-6 text-[var(--muted)]">
                 <p className="font-semibold text-[var(--foreground)]">Expiry</p>
-                <p>{new Intl.DateTimeFormat("en-RW", { dateStyle: "medium" }).format(new Date(request.expiresAt))}</p>
+                <p>{formatDate(request.expiresAt)}</p>
               </div>
             </div>
           </section>

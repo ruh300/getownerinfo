@@ -4,6 +4,8 @@ import { requireSession } from "@/lib/auth/session";
 import { canAccessAdmin, canCreateListings } from "@/lib/auth/types";
 import { getBuyerWorkspaceData } from "@/lib/dashboard/workspace";
 import { formatRwf } from "@/lib/formatting/currency";
+import { formatDate, formatDateTime } from "@/lib/formatting/date";
+import { getCategoryLabel, humanizeEnum } from "@/lib/formatting/text";
 import { getOwnerWorkspaceData } from "@/lib/listings/workflow";
 
 export default async function DashboardPage() {
@@ -187,7 +189,7 @@ export default async function DashboardPage() {
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div>
                         <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">
-                          {draft.category.replaceAll("_", " ")}
+                          {getCategoryLabel(draft.category)}
                         </p>
                         <h3 className="mt-2 font-[var(--font-display)] text-2xl">{draft.title}</h3>
                       </div>
@@ -210,11 +212,11 @@ export default async function DashboardPage() {
                       <div className="rounded-2xl bg-[var(--surface-alt)] px-4 py-3 text-sm leading-6 text-[var(--muted)]">
                         <p className="font-semibold text-[var(--foreground)]">Linked review</p>
                         <p>{draft.submittedListingId ? `Listing ${draft.submittedListingId}` : "Not submitted yet"}</p>
-                        <p>{draft.submittedAt ? new Intl.DateTimeFormat("en-RW", { dateStyle: "medium", timeStyle: "short" }).format(new Date(draft.submittedAt)) : "Awaiting submission"}</p>
+                        <p>{draft.submittedAt ? formatDateTime(draft.submittedAt) : "Awaiting submission"}</p>
                       </div>
                     </div>
                     <p className="mt-4 text-sm leading-6 text-[var(--muted)]">
-                      Last updated {new Intl.DateTimeFormat("en-RW", { dateStyle: "medium", timeStyle: "short" }).format(new Date(draft.updatedAt))}
+                      Last updated {formatDateTime(draft.updatedAt)}
                     </p>
                   </article>
                 ))
@@ -240,12 +242,12 @@ export default async function DashboardPage() {
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div>
                         <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">
-                          {listing.category.replaceAll("_", " ")}
+                          {getCategoryLabel(listing.category)}
                         </p>
                         <h3 className="mt-2 font-[var(--font-display)] text-2xl">{listing.title}</h3>
                       </div>
                       <div className="rounded-[20px] border border-[var(--border)] bg-[var(--surface-alt)] px-4 py-3 text-sm leading-6 text-[var(--foreground)]">
-                        <p>{listing.status.replaceAll("_", " ")}</p>
+                        <p>{humanizeEnum(listing.status)}</p>
                         <p>{listing.verificationStatus}</p>
                         <p>Model {listing.model}</p>
                       </div>
@@ -255,7 +257,7 @@ export default async function DashboardPage() {
                       <p>{listing.reviewNote ?? "No admin note yet."}</p>
                     </div>
                     <p className="mt-4 text-sm leading-6 text-[var(--muted)]">
-                      Submitted {new Intl.DateTimeFormat("en-RW", { dateStyle: "medium", timeStyle: "short" }).format(new Date(listing.submittedAt))}
+                      Submitted {formatDateTime(listing.submittedAt)}
                     </p>
                   </article>
                 ))
@@ -291,7 +293,7 @@ export default async function DashboardPage() {
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">
-                          {inquiry.listingCategory.replaceAll("_", " ")}
+                          {getCategoryLabel(inquiry.listingCategory)}
                         </p>
                         <h3 className="mt-2 font-[var(--font-display)] text-2xl">{inquiry.listingTitle}</h3>
                       </div>
@@ -309,9 +311,7 @@ export default async function DashboardPage() {
                     <p className="mt-4 text-sm leading-6 text-[var(--foreground)]">{inquiry.body}</p>
                     <p className="mt-4 text-sm leading-6 text-[var(--muted)]">
                       Received{" "}
-                      {new Intl.DateTimeFormat("en-RW", { dateStyle: "medium", timeStyle: "short" }).format(
-                        new Date(inquiry.createdAt),
-                      )}
+                      {formatDateTime(inquiry.createdAt)}
                     </p>
                   </article>
                 ))}
@@ -384,11 +384,11 @@ export default async function DashboardPage() {
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div>
                         <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">
-                          {listing.category.replaceAll("_", " ")}
+                          {getCategoryLabel(listing.category)}
                         </p>
                         <h3 className="mt-2 font-[var(--font-display)] text-2xl">{listing.title}</h3>
                         <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                          {listing.approximateAreaLabel} · {listing.ownerName} · {listing.ownerPhone}
+                          {listing.approximateAreaLabel} / {listing.ownerName} / {listing.ownerPhone}
                         </p>
                       </div>
                       <div className="rounded-[20px] border border-[var(--border)] bg-[var(--surface-alt)] px-4 py-3 text-sm leading-6 text-[var(--foreground)]">
@@ -406,7 +406,7 @@ export default async function DashboardPage() {
                       </Link>
                     </div>
                     <p className="mt-4 text-sm leading-6 text-[var(--muted)]">
-                      Unlocked {new Intl.DateTimeFormat("en-RW", { dateStyle: "medium", timeStyle: "short" }).format(new Date(listing.unlockedAt))}
+                      Unlocked {formatDateTime(listing.unlockedAt)}
                     </p>
                   </article>
                 ))
@@ -432,7 +432,7 @@ export default async function DashboardPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">
-                          {payment.purpose.replaceAll("_", " ")}
+                          {humanizeEnum(payment.purpose)}
                         </p>
                         <h3 className="mt-2 font-semibold text-[var(--foreground)]">{formatRwf(payment.amountRwf)}</h3>
                       </div>
@@ -442,7 +442,7 @@ export default async function DashboardPage() {
                     </div>
                     <p className="mt-3 text-sm leading-6 text-[var(--muted)]">{payment.reference}</p>
                     <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                      {new Intl.DateTimeFormat("en-RW", { dateStyle: "medium", timeStyle: "short" }).format(new Date(payment.createdAt))}
+                      {formatDateTime(payment.createdAt)}
                     </p>
                   </article>
                 ))
@@ -464,7 +464,7 @@ export default async function DashboardPage() {
                     className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_12px_32px_rgba(0,0,0,0.06)]"
                   >
                     <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">
-                      {listing.category.replaceAll("_", " ")}
+                      {getCategoryLabel(listing.category)}
                     </p>
                     <h3 className="mt-2 font-semibold text-[var(--foreground)]">{listing.title}</h3>
                     <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
@@ -514,7 +514,7 @@ export default async function DashboardPage() {
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">
-                          {request.category.replaceAll("_", " ")}
+                          {getCategoryLabel(request.category)}
                         </p>
                         <h3 className="mt-2 font-[var(--font-display)] text-2xl">{request.title}</h3>
                       </div>
@@ -537,7 +537,7 @@ export default async function DashboardPage() {
                       <span>{request.durationDays} day window</span>
                     </div>
                     <p className="mt-4 text-sm leading-6 text-[var(--muted)]">
-                      Expires {new Intl.DateTimeFormat("en-RW", { dateStyle: "medium" }).format(new Date(request.expiresAt))}
+                      Expires {formatDate(request.expiresAt)}
                     </p>
                     <div className="mt-4 flex flex-wrap gap-3">
                       <Link

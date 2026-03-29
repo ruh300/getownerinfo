@@ -5,18 +5,8 @@ import { useState, useTransition } from "react";
 
 import { listingCategories, seekerRequestDurations, type ListingCategory, type SeekerRequestDurationDays } from "@/lib/domain";
 import { formatRwf } from "@/lib/formatting/currency";
+import { getCategoryLabel } from "@/lib/formatting/text";
 import { getSeekerPostFeeRwf, seekerViewTokenFeeRwf } from "@/lib/seeker-requests/pricing";
-
-const categoryLabels: Record<ListingCategory, string> = {
-  real_estate_rent: "Real Estate Rent",
-  real_estate_sale: "Real Estate Sale",
-  vehicles_for_sale: "Vehicles for Sale",
-  vehicle_resellers: "Vehicle Resellers",
-  furniture: "Furniture",
-  made_in_rwanda: "Made in Rwanda",
-  home_appliances: "Home Appliances",
-  business_industry: "Business and Industry",
-};
 
 type CreateSeekerRequestResponse = {
   status: "ok" | "error";
@@ -98,7 +88,7 @@ export function SeekerRequestForm() {
           >
             {listingCategories.map((item) => (
               <option key={item} value={item}>
-                {categoryLabels[item]}
+                {getCategoryLabel(item)}
               </option>
             ))}
           </select>

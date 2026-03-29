@@ -1,19 +1,9 @@
 import Link from "next/link";
 
-import { listingCategories, type ListingCategory } from "@/lib/domain";
+import { listingCategories } from "@/lib/domain";
 import { formatRwf } from "@/lib/formatting/currency";
+import { getCategoryLabel } from "@/lib/formatting/text";
 import { getPublicListings } from "@/lib/listings/public";
-
-const categoryLabels: Record<ListingCategory, string> = {
-  real_estate_rent: "Real Estate Rent",
-  real_estate_sale: "Real Estate Sale",
-  vehicles_for_sale: "Vehicles for Sale",
-  vehicle_resellers: "Vehicle Resellers",
-  furniture: "Furniture",
-  made_in_rwanda: "Made in Rwanda",
-  home_appliances: "Home Appliances",
-  business_industry: "Business and Industry",
-};
 
 function getTextValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -85,7 +75,7 @@ export default async function ListingsPage({
             <option value="">All categories</option>
             {listingCategories.map((item) => (
               <option key={item} value={item}>
-                {categoryLabels[item]}
+                {getCategoryLabel(item)}
               </option>
             ))}
           </select>
@@ -134,7 +124,7 @@ export default async function ListingsPage({
               <div className="space-y-4 p-6">
                 <div className="flex flex-wrap gap-2">
                   <span className="rounded-full bg-[rgba(26,77,46,0.1)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--primary)]">
-                    {categoryLabels[listing.category]}
+                    {getCategoryLabel(listing.category)}
                   </span>
                   <span className="rounded-full border border-[var(--border)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
                     Model {listing.model}

@@ -5,6 +5,8 @@ import { useEffect, useState, useTransition } from "react";
 
 import type { ListingMessageSummary } from "@/lib/chat/workflow";
 import type { UserRole } from "@/lib/domain";
+import { formatDateTime } from "@/lib/formatting/date";
+import { humanizeEnum } from "@/lib/formatting/text";
 
 type AvailabilityChatProps = {
   listingId: string;
@@ -239,13 +241,13 @@ export function AvailabilityChat({
                       key={`${message.id}-${type}`}
                       className="rounded-full border border-[rgba(184,50,50,0.18)] bg-[rgba(184,50,50,0.08)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#9c2d2d]"
                     >
-                      {type.replaceAll("_", " ")}
+                      {humanizeEnum(type)}
                     </span>
                   ))}
                 </div>
               ) : null}
               <p className="mt-3 text-xs leading-5 text-[var(--muted)]">
-                {new Intl.DateTimeFormat("en-RW", { dateStyle: "medium", timeStyle: "short" }).format(new Date(message.createdAt))}
+                {formatDateTime(message.createdAt)}
               </p>
             </article>
           ))

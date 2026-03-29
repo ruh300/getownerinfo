@@ -4,7 +4,14 @@ import type { AuthSession } from "@/lib/auth/types";
 import { ensureUserRecord } from "@/lib/auth/user-record";
 import { getOwnerInquiryFeedForUser, type OwnerInquirySummary } from "@/lib/chat/workflow";
 import { getCollection } from "@/lib/data/collections";
-import type { ListingDocument, ListingDraftDocument, ListingModel } from "@/lib/domain";
+import type {
+  AuditLogDocument,
+  ListingDocument,
+  ListingDraftDocument,
+  ListingModel,
+  UserDocument,
+  UserRole,
+} from "@/lib/domain";
 import { validateListingDraftInput } from "@/lib/listings/drafts";
 
 export type OwnerDraftSummary = {
@@ -75,6 +82,17 @@ export type AdminDecisionSummary = {
   reviewNote: string | null;
 };
 
+export type AdminAuditSummary = {
+  id: string;
+  action: string;
+  entityType: AuditLogDocument["entityType"];
+  entityId: string;
+  actorName: string;
+  actorRole: UserRole | null;
+  createdAt: string;
+  metadataSummary: string | null;
+};
+
 export type AdminWorkspaceData = {
   stats: {
     pendingCount: number;
@@ -84,6 +102,7 @@ export type AdminWorkspaceData = {
   };
   reviewQueue: AdminReviewSummary[];
   recentDecisions: AdminDecisionSummary[];
+  recentActivity: AdminAuditSummary[];
 };
 
 const defaultListingTokenFeeRwf = 10_000;
@@ -161,6 +180,46 @@ function serializeAdminDecision(listing: WithId<ListingDocument>): AdminDecision
     ownerName: listing.ownerContact.fullName,
     reviewedAt: listing.reviewedAt?.toISOString() ?? null,
     reviewNote: listing.reviewNote ?? null,
+  };
+}
+
+function serializeMetadataValue(value: unknown): string {
+  if (Array.isArray(value)) {
+    return value.map(serializeMetadataValue).join(", ");
+  }
+
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  return JSON.stringify(value);
+}
+
+function summarizeAuditMetadata(metadata?: Record<string, unknown>) {
+  if (!metadata) {
+    return null;
+  }
+
+  const parts = Object.entries(metadata)
+    .filter(([, value]) => value !== undefined && value !== null && value !== "")
+    .slice(0, 3)
+    .map(([key, value]) => `${key.replace(/[_-]+/g, " ")}: ${serializeMetadataValue(value)}`);
+
+  return parts.length > 0 ? parts.join(" / ") : null;
+}
+
+function serializeAdminAudit(log: WithId<AuditLogDocument>, actorMap: Map<string, WithId<UserDocument>>): AdminAuditSummary {
+  const actor = log.actorUserId ? actorMap.get(log.actorUserId.toString()) : null;
+
+  return {
+    id: log._id.toString(),
+    action: log.action,
+    entityType: log.entityType,
+    entityId: log.entityId,
+    actorName: actor?.fullName ?? (log.actorUserId ? "Unknown user" : "System"),
+    actorRole: actor?.role ?? null,
+    createdAt: log.createdAt.toISOString(),
+    metadataSummary: summarizeAuditMetadata(log.metadata),
   };
 }
 
@@ -370,7 +429,10 @@ export async function getOwnerWorkspaceData(session: AuthSession): Promise<Owner
 
 export async function getAdminWorkspaceData(): Promise<AdminWorkspaceData> {
   const listings = await getCollection("listings");
-  const [reviewQueue, recentDecisions, pendingCount, activeCount, rejectedCount, totalListingCount] = await Promise.all([
+  const auditLogs = await getCollection("auditLogs");
+  const users = await getCollection("users");
+  const [reviewQueue, recentDecisions, recentAuditLogs, pendingCount, activeCount, rejectedCount, totalListingCount] =
+    await Promise.all([
     listings
       .find({
         status: "pending_approval",
@@ -385,11 +447,28 @@ export async function getAdminWorkspaceData(): Promise<AdminWorkspaceData> {
       .sort({ reviewedAt: -1, updatedAt: -1 })
       .limit(8)
       .toArray(),
+    auditLogs
+      .find({})
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .toArray(),
     listings.countDocuments({ status: "pending_approval" }),
     listings.countDocuments({ status: "active" }),
     listings.countDocuments({ status: "rejected" }),
     listings.countDocuments({}),
-  ]);
+    ]);
+  const actorIds = [...new Set(recentAuditLogs.flatMap((log) => (log.actorUserId ? [log.actorUserId.toString()] : [])))].map(
+    (id) => new ObjectId(id),
+  );
+  const actors =
+    actorIds.length > 0
+      ? await users
+          .find({
+            _id: { $in: actorIds },
+          })
+          .toArray()
+      : [];
+  const actorMap = new Map(actors.map((actor) => [actor._id.toString(), actor]));
 
   return {
     stats: {
@@ -400,6 +479,7 @@ export async function getAdminWorkspaceData(): Promise<AdminWorkspaceData> {
     },
     reviewQueue: reviewQueue.map(serializeAdminReview),
     recentDecisions: recentDecisions.map(serializeAdminDecision),
+    recentActivity: recentAuditLogs.map((log) => serializeAdminAudit(log, actorMap)),
   };
 }
 

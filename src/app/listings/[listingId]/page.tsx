@@ -5,6 +5,8 @@ import { AvailabilityChat } from "@/components/listings/availability-chat";
 import { UnlockContactPanel } from "@/components/listings/unlock-contact-panel";
 import { getCurrentSession } from "@/lib/auth/session";
 import { formatRwf } from "@/lib/formatting/currency";
+import { formatDateTime } from "@/lib/formatting/date";
+import { getCategoryLabel, humanizeEnum } from "@/lib/formatting/text";
 import { hasListingUnlockForSession } from "@/lib/listings/access";
 import { getPublicListingDetail } from "@/lib/listings/public";
 
@@ -37,7 +39,7 @@ export default async function ListingDetailPage({
             Back to listings
           </Link>
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
-            {listing.category.replaceAll("_", " ")}
+            {getCategoryLabel(listing.category)}
           </p>
           <h1 className="font-[var(--font-display)] text-4xl leading-tight md:text-5xl">{listing.title}</h1>
           <p className="max-w-3xl text-base leading-7 text-[var(--muted)]">
@@ -134,13 +136,8 @@ export default async function ListingDetailPage({
                 {listing.district ? `, ${listing.district}` : ""}
               </p>
               <p>Exact street address remains hidden until the token payment succeeds.</p>
-              <p>Owner type: {listing.ownerType.replaceAll("_", " ")}</p>
-              <p>
-                Last updated{" "}
-                {new Intl.DateTimeFormat("en-RW", { dateStyle: "medium", timeStyle: "short" }).format(
-                  new Date(listing.updatedAt),
-                )}
-              </p>
+              <p>Owner type: {humanizeEnum(listing.ownerType)}</p>
+              <p>Last updated {formatDateTime(listing.updatedAt)}</p>
             </div>
           </section>
         </aside>

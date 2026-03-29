@@ -18,8 +18,12 @@ const dmSerif = DM_Serif_Display({
 });
 
 export const metadata: Metadata = {
-  title: "getownerinfo",
-  description: "Free-first marketplace starter for verified owner access and token unlock flows.",
+  title: {
+    default: "getownerinfo",
+    template: "%s | getownerinfo",
+  },
+  description:
+    "Verified owner-access marketplace for Rwanda with listing approvals, seeker demand, protected buyer workflows, and token unlock flows.",
 };
 
 export default async function RootLayout({

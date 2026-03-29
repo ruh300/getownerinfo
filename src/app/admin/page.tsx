@@ -76,7 +76,11 @@ export default async function AdminPage() {
             </article>
           </section>
 
-          <ReviewBoard reviewQueue={workspace.reviewQueue} recentDecisions={workspace.recentDecisions} />
+          <ReviewBoard
+            reviewQueue={workspace.reviewQueue}
+            recentDecisions={workspace.recentDecisions}
+            recentActivity={workspace.recentActivity}
+          />
         </>
       ) : null}
     </main>
