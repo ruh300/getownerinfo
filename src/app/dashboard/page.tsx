@@ -335,7 +335,7 @@ export default async function DashboardPage() {
               <article className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
                 <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Spent</p>
                 <h2 className="mt-3 font-[var(--font-display)] text-4xl">{formatRwf(buyerWorkspace.stats.totalSpentRwf)}</h2>
-                <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Settled unlock payments recorded in your account.</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Settled listing unlock and seeker-request payments recorded in your account.</p>
               </article>
               <article className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
                 <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Active contacts</p>
@@ -345,7 +345,7 @@ export default async function DashboardPage() {
               <article className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
                 <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Pending checkout</p>
                 <h2 className="mt-3 font-[var(--font-display)] text-4xl">{buyerWorkspace.stats.pendingPaymentCount}</h2>
-                <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Unlocks waiting for payment confirmation.</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Unlocks or seeker posts waiting for payment confirmation.</p>
               </article>
               <article className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
                 <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Seeker posts</p>
@@ -427,12 +427,12 @@ export default async function DashboardPage() {
               <section className="space-y-4">
                 <div>
                   <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Payment ledger</p>
-                  <h2 className="mt-2 font-[var(--font-display)] text-3xl">Recent unlock payment activity</h2>
+                  <h2 className="mt-2 font-[var(--font-display)] text-3xl">Recent buyer payment activity</h2>
                 </div>
 
                 {buyerWorkspace.recentPayments.length === 0 ? (
                   <div className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 text-sm leading-6 text-[var(--muted)] shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
-                    No unlock payment records have been created yet.
+                    No buyer payment records have been created yet.
                   </div>
                 ) : (
                   buyerWorkspace.recentPayments.map((payment) => (
@@ -460,7 +460,7 @@ export default async function DashboardPage() {
                         </div>
                       </div>
                       <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
-                        {payment.linkedLabel ?? "Linked listing unavailable"}
+                        {payment.linkedLabel ?? (payment.purpose === "seeker_post_fee" ? "Linked seeker request unavailable" : "Linked listing unavailable")}
                       </p>
                       <p className="mt-1 text-sm leading-6 text-[var(--muted)]">{payment.reference}</p>
                       <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
@@ -482,7 +482,11 @@ export default async function DashboardPage() {
                             href={payment.linkedPath}
                             className="rounded-full border border-[var(--primary)] px-4 py-2 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--primary)] transition hover:bg-[var(--surface-alt)]"
                           >
-                            Open listing
+                            {payment.purpose === "seeker_post_fee"
+                              ? payment.status === "paid"
+                                ? "Open seeker request"
+                                : "Open request flow"
+                              : "Open listing"}
                           </Link>
                         ) : null}
                       </div>

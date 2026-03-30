@@ -27,7 +27,7 @@ export function PendingPaymentList({ payments }: PendingPaymentListProps) {
 
       {payments.length === 0 ? (
         <div className="rounded-[24px] border border-[rgba(200,134,10,0.18)] bg-[linear-gradient(180deg,#fff9ef,#fff5e0)] p-6 text-sm leading-6 text-[var(--muted)] shadow-[0_12px_32px_rgba(200,134,10,0.08)]">
-          You do not have any active checkouts right now. If you start an unlock and leave before payment confirmation, it will reappear here until it expires or is cancelled.
+          You do not have any active checkouts right now. If you start a listing unlock or seeker-request posting flow and leave before payment confirmation, it will reappear here until it expires or is cancelled.
         </div>
       ) : (
         <div className="grid gap-4 xl:grid-cols-2">
@@ -74,7 +74,7 @@ export function PendingPaymentList({ payments }: PendingPaymentListProps) {
                     href={payment.linkedPath}
                     className="rounded-full border border-[var(--accent)] px-4 py-2 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--accent)] transition hover:bg-[rgba(200,134,10,0.08)]"
                   >
-                    Open listing
+                    {payment.purpose === "seeker_post_fee" ? "Open request flow" : "Open listing"}
                   </Link>
                 ) : null}
               </div>

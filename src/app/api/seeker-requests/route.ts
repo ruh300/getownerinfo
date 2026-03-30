@@ -67,10 +67,11 @@ export async function POST(request: NextRequest) {
     const response = NextResponse.json(
       {
         status: "ok",
-        requestId: result.request._id.toString(),
-        request: result.request,
+        checkoutUrl: result.checkoutUrl,
+        paymentReference: result.paymentReference,
+        reused: result.reused,
       },
-      { status: 201 },
+      { status: result.reused ? 200 : 201 },
     );
 
     return applyRateLimitHeaders(response, rateLimit);

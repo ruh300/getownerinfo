@@ -1,12 +1,21 @@
 import Link from "next/link";
 
+import { PaymentReturnNotice } from "@/components/payments/payment-return-notice";
 import { SeekerRequestForm } from "@/components/seeker-requests/seeker-request-form";
 import { requireSession } from "@/lib/auth/session";
 import { getFeeSettingsSummary } from "@/lib/fee-settings/workflow";
+import { getSingleSearchParam, parsePaymentReturnStatus } from "@/lib/payments/search-params";
 
-export default async function NewSeekerRequestPage() {
+export default async function NewSeekerRequestPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ payment?: string | string[]; paymentReference?: string | string[] }>;
+}) {
   await requireSession({ roles: ["buyer"] });
+  const resolvedSearchParams = await searchParams;
   const feeSettings = await getFeeSettingsSummary();
+  const paymentStatus = parsePaymentReturnStatus(resolvedSearchParams.payment);
+  const paymentReference = getSingleSearchParam(resolvedSearchParams.paymentReference);
 
   return (
     <main className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-6xl flex-col gap-8 px-5 py-8 md:px-8 md:py-10">
@@ -18,7 +27,7 @@ export default async function NewSeekerRequestPage() {
               Post what you need and let the right owner come to you.
             </h1>
             <p className="max-w-3xl text-base leading-7 text-[var(--muted)]">
-              Use seeker requests when the right listing is missing or buried. The public board stays anonymized, while your contact details remain hidden until the future owner token flow is added.
+              Use seeker requests when the right listing is missing or buried. The public board stays anonymized, your contact details stay hidden, and the request only goes live after the posting payment settles.
             </p>
             <div className="flex flex-wrap gap-3">
               <Link
@@ -46,12 +55,31 @@ export default async function NewSeekerRequestPage() {
                 Your name and phone remain hidden from the public board.
               </div>
               <div className="rounded-2xl border border-[rgba(255,255,255,0.14)] bg-[rgba(255,255,255,0.08)] p-4">
-                The posting fee is recorded as a prototype payment so we can wire real AfrIPay later.
+                A checkout is created first, and the request publishes only after the payment is confirmed.
               </div>
             </div>
           </div>
         </div>
       </section>
+
+      {paymentStatus ? (
+        <section className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
+          <PaymentReturnNotice
+            status={paymentStatus}
+            reference={paymentReference}
+            subject="Seeker request posting"
+            bodyOverride={
+              paymentStatus === "paid"
+                ? "The posting payment settled successfully and the seeker request is now live."
+                : paymentStatus === "pending"
+                  ? "The gateway returned without a final status. Your request will stay unpublished until the payment is confirmed or manually reviewed."
+                  : paymentStatus === "failed"
+                    ? "The posting fee did not complete, so the seeker request was not published."
+                    : "The posting flow was cancelled before settlement, so the seeker request was not published."
+            }
+          />
+        </section>
+      ) : null}
 
       <section className="rounded-[30px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.08)] md:p-8">
         <SeekerRequestForm feeSettings={feeSettings} />

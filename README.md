@@ -41,11 +41,11 @@ The initial build favors:
 ## Immediate Next Steps
 
 1. Validate the legacy AfrIPay form-post contract against real gateway return payloads and reduce remaining manual-review ambiguity
-2. Move seeker-post creation onto the same pending payment-intent flow used by unlocks
-3. Add penalties, commission tracking, and stronger payment operations tooling
+2. Add penalties, commission tracking, and stronger payment operations tooling
+3. Add focused integration tests around payment callbacks, seeker posting settlement, and admin manual reconciliation
 4. Harden auth, rate limiting, and deployment configuration for production
 5. Rotate any AfrIPay credentials that were ever exposed in frontend templates, then keep them server-side only
-6. Add focused integration tests and launch polish from `docs/engineering-roadmap.md`
+6. Finish launch polish from `docs/engineering-roadmap.md`
 
 ## Current Integration Status
 
@@ -69,9 +69,10 @@ The initial build favors:
 - Buyer dashboards now show unlock history, pending checkout actions, payment records, and recommended approved listings
 - `GET` and `POST /api/listings/[listingId]/messages` now support pre-unlock buyer inquiries with blocked contact-sharing rules and audit logging
 - Owner dashboards now surface recent buyer inquiries for approved listings
-- `POST /api/seeker-requests` now records anonymized buyer demand posts with a prototype seeker posting fee
+- `POST /api/seeker-requests` now creates a pending checkout intent and only publishes the anonymized buyer demand post after payment settlement
 - `/seeker-requests` and `/seeker-requests/new` now expose the public seeker board and protected buyer request form
 - Buyer dashboards now include live seeker request history and active seeker counts
+- `/seeker-requests/new` now preserves the buyer draft in local storage so a checkout return does not wipe the seeker form
 - `POST /api/seeker-requests/[requestId]/unlock` now creates a pending checkout intent for owner-side seeker contact unlocks and applies access after settlement
 - `/seeker-requests/[requestId]` now exposes a detail page with locked seeker contact fields and owner-side unlock flow
 - `POST /api/seeker-requests/[requestId]/responses` now lets unlocked owner-side accounts send or update a direct response to the seeker
@@ -89,8 +90,10 @@ The initial build favors:
 - `/api/payments/callback/afripay` now accepts both query-string and form-post returns, maps recognizable statuses automatically, and keeps ambiguous returns pending for manual review instead of unlocking incorrectly
 - `/api/payments/webhooks/afripay` now accepts `client_token` as a payment reference fallback for legacy payloads
 - AfrIPay callback and webhook routes now share the same route-input validation layer and provider-status mapping instead of duplicating parsing logic
+- `/api/admin/payments/[reference]/status` now lets admin accounts manually reconcile ambiguous pending payments without editing Mongo data directly
 - Listing and seeker detail pages now surface payment return-state banners so paid, failed, and cancelled checkout outcomes read clearly after redirect
 - `/admin` now includes cancelled-payment counts and a payment transition feed so operations can see pending, failed, cancelled, and settled movements in one payment-native view
+- `/admin` payment cards now include manual reconciliation actions for pending or ambiguous AfrIPay outcomes, while paid payments stay immutable from the UI
 - Sign-in, unlock, seeker-post, and messaging write routes now use Mongo-backed rate limiting with response headers and retry hints
 - Draft save/submit, upload-sign, admin review/settings, lifecycle changes, notification-read, seeker responses, and mock payment completion now use the same durable rate-limit layer
 - Core write routes now share a reusable JSON-object parser and input-error helper so malformed payloads fail consistently instead of being handled ad hoc
@@ -125,6 +128,7 @@ If Cloudinary works but MongoDB does not, check Atlas before changing code:
 - `/api/payments/callback/afripay`
 - `/api/payments/mock/[reference]/complete`
 - `/api/payments/webhooks/afripay`
+- `/api/admin/payments/[reference]/status`
 - `/api/listings/[listingId]/messages`
 - `/api/listings/[listingId]/unlock`
 - `/api/listings/eligibility?category=real_estate_rent&units=1&priceRwf=1500000`

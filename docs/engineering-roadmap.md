@@ -17,9 +17,9 @@ The app already has:
 - requester-side seeker fulfillment and closure with matched owner outcome tracking
 - matched-only seeker follow-up messaging between the requester and selected owner response
 - admin-configurable listing token fees and seeker pricing flowing through shared settings
-- payment records, pending unlock checkout intents, and provider-ready settlement routes flowing through a shared payment workflow
+- payment records, pending unlock and seeker-post checkout intents, provider-ready settlement routes, and admin-side manual payment reconciliation flowing through a shared payment workflow
 - payment transition audit logs, shared AfrIPay callback/webhook validation, an admin payment operations feed, and the legacy AfrIPay form-post handoff contract
-- buyer-side pending checkout visibility and return-state messaging on unlock detail pages
+- buyer-side pending checkout visibility, seeker-post draft persistence, and return-state messaging on detail pages and the seeker-post flow
 - automatic Mongo index bootstrap and Mongo-backed throttling across sign-in and the main write surface
 - shared request-body parsing and route-level validation helpers across the core write routes
 - notification infrastructure across review, unlock, inquiry, and seeker flows
@@ -55,7 +55,7 @@ These are the items that must be completed before treating the app as a real mar
 5. Rotate exposed AfrIPay secrets and validate Vercel environment configuration.
 6. Extend the new rate limiting and abuse controls from the current protected write routes to any future export, penalty, or webhook-management endpoints.
 7. Extend the new server-side validation consistency pattern to the few remaining write routes and webhook payload verification.
-8. Add immutable audit visibility for unlocks, seeker unlocks, and admin overrides.
+8. Add immutable audit visibility for unlocks, seeker unlocks, seeker-post publication, and admin overrides.
 
 ## Priority 1: Workflow Completion
 
@@ -119,7 +119,7 @@ This tranche focuses on workflow completion across listing and seeker demand flo
 - requester-side closure and fulfillment actions with matched owner tracking
 - matched-only post-fulfillment seeker follow-up threads and dashboard visibility
 - admin-managed fee settings for listing token fees and seeker pricing
-- pending checkout intents and mock hosted payment confirmation for listing and seeker unlocks
+- pending checkout intents and mock hosted payment confirmation for listing unlocks, seeker unlocks, and seeker-post publishing
 - dashboard and detail-page UI polish for continuing checkout and understanding payment return states
-- payment transition visibility for admins, safer AfrIPay callback/webhook parsing, and legacy form-post gateway handoff
+- payment transition visibility for admins, safer AfrIPay callback/webhook parsing, legacy form-post gateway handoff, and admin manual reconciliation
 - updated phase tracking for workflow completion

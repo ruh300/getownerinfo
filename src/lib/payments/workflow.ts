@@ -2,24 +2,30 @@ import { randomBytes } from "node:crypto";
 
 import { ObjectId, type WithId } from "mongodb";
 
+import { adminRoles } from "@/lib/auth/types";
 import type { AuthSession } from "@/lib/auth/types";
 import { ensureUserRecord } from "@/lib/auth/user-record";
 import { getCollection } from "@/lib/data/collections";
 import { getServerEnv } from "@/lib/env";
 import {
+  listingCategories,
   paymentPurposes,
   paymentStatuses,
+  seekerRequestDurations,
 } from "@/lib/domain";
 import type {
   AuditLogDocument,
+  ListingCategory,
   PaymentDocument,
   PaymentPurpose,
   PaymentStatus,
+  SeekerRequestDocument,
+  SeekerRequestDurationDays,
   SeekerRequestUnlockDocument,
   TokenUnlockDocument,
   UserDocument,
 } from "@/lib/domain";
-import { createNotification } from "@/lib/notifications/workflow";
+import { createNotification, notifyUsersByRoles } from "@/lib/notifications/workflow";
 import { assertAfripayServerCredentials, getAfripayGatewayUrl } from "@/lib/payments/afripay";
 
 const checkoutLifetimeMs = 30 * 60 * 1000;
@@ -43,13 +49,14 @@ export type CreatePaymentRecordInput = {
 export type CreatePaymentIntentInput = {
   userId: ObjectId;
   amountRwf: number;
-  purpose: Extract<PaymentPurpose, "token_fee" | "seeker_view_token">;
+  purpose: Extract<PaymentPurpose, "token_fee" | "seeker_view_token" | "seeker_post_fee">;
   listingId?: ObjectId;
   seekerRequestId?: ObjectId;
   metadata?: Record<string, unknown>;
   referencePrefix?: string;
   relatedEntityId?: string;
   returnPath: string;
+  pendingReuseKey?: string;
 };
 
 export type PaymentIntentResult = {
@@ -108,7 +115,7 @@ export type PaymentTransitionResult = {
 export type TransitionPaymentStatusInput = {
   reference: string;
   status: Extract<PaymentStatus, "paid" | "failed" | "cancelled">;
-  source: "mock_checkout" | "afripay_callback" | "afripay_webhook" | "system";
+  source: "mock_checkout" | "afripay_callback" | "afripay_webhook" | "admin_manual_review" | "system";
   actorUserId?: ObjectId;
   providerReference?: string;
   providerTransactionId?: string;
@@ -294,7 +301,7 @@ function serializeAdminPaymentEvent(
     amountRwf: getNumberMetadataValue(metadata, "amountRwf"),
     currentStatus: getPaymentStatusValue(metadata?.status),
     previousStatus: getPaymentStatusValue(metadata?.previousStatus),
-    nextStatus: getPaymentStatusValue(metadata?.nextStatus),
+    nextStatus: getPaymentStatusValue(metadata?.nextStatus) ?? getPaymentStatusValue(metadata?.reviewedStatus),
     source: getStringMetadataValue(metadata, "source"),
     lastProviderStatus: getStringMetadataValue(metadata, "lastProviderStatus"),
     failureReason: getStringMetadataValue(metadata, "failureReason"),
@@ -365,6 +372,84 @@ function buildAfripayCheckoutData(payment: Pick<PaymentDocument, "amountRwf" | "
       app_id: credentials.appId,
       app_secret: credentials.appSecret,
     },
+  };
+}
+
+type SeekerRequestDraftFromPayment = {
+  category: ListingCategory;
+  title: string;
+  details: string;
+  budgetMinRwf: number;
+  budgetMaxRwf: number;
+  quantityLabel: string;
+  preferredContactTime: string;
+  approximateAreaLabel: string;
+  district?: string;
+  sector?: string;
+  durationDays: SeekerRequestDurationDays;
+  contactName: string;
+  contactPhone: string;
+  postedFeeRwf: number;
+  viewTokenFeeRwf: number;
+  expiresAt: Date;
+};
+
+function parseRequiredMetadataString(metadata: Record<string, unknown> | undefined, key: string) {
+  const value = getStringMetadataValue(metadata, key);
+
+  if (!value) {
+    throw new Error(`Payment metadata is missing ${key}.`);
+  }
+
+  return value;
+}
+
+function parseRequiredMetadataNumber(metadata: Record<string, unknown> | undefined, key: string) {
+  const value = getNumberMetadataValue(metadata, key);
+
+  if (value === null) {
+    throw new Error(`Payment metadata is missing ${key}.`);
+  }
+
+  return value;
+}
+
+function getSeekerRequestDraftFromPayment(payment: Pick<PaymentDocument, "metadata">): SeekerRequestDraftFromPayment {
+  const metadata = payment.metadata;
+  const category = parseRequiredMetadataString(metadata, "category");
+  const durationDays = parseRequiredMetadataNumber(metadata, "durationDays");
+  const expiresAtValue = parseRequiredMetadataString(metadata, "expiresAt");
+  const expiresAt = new Date(expiresAtValue);
+
+  if (!listingCategories.includes(category as ListingCategory)) {
+    throw new Error("Payment metadata contains an invalid seeker request category.");
+  }
+
+  if (!seekerRequestDurations.includes(durationDays as SeekerRequestDurationDays)) {
+    throw new Error("Payment metadata contains an invalid seeker request duration.");
+  }
+
+  if (Number.isNaN(expiresAt.getTime())) {
+    throw new Error("Payment metadata contains an invalid seeker request expiry.");
+  }
+
+  return {
+    category: category as ListingCategory,
+    title: parseRequiredMetadataString(metadata, "title"),
+    details: parseRequiredMetadataString(metadata, "details"),
+    budgetMinRwf: parseRequiredMetadataNumber(metadata, "budgetMinRwf"),
+    budgetMaxRwf: parseRequiredMetadataNumber(metadata, "budgetMaxRwf"),
+    quantityLabel: parseRequiredMetadataString(metadata, "quantityLabel"),
+    preferredContactTime: parseRequiredMetadataString(metadata, "preferredContactTime"),
+    approximateAreaLabel: parseRequiredMetadataString(metadata, "approximateAreaLabel"),
+    district: getStringMetadataValue(metadata, "district") ?? undefined,
+    sector: getStringMetadataValue(metadata, "sector") ?? undefined,
+    durationDays: durationDays as SeekerRequestDurationDays,
+    contactName: parseRequiredMetadataString(metadata, "contactName"),
+    contactPhone: parseRequiredMetadataString(metadata, "contactPhone"),
+    postedFeeRwf: parseRequiredMetadataNumber(metadata, "postedFeeRwf"),
+    viewTokenFeeRwf: parseRequiredMetadataNumber(metadata, "viewTokenFeeRwf"),
+    expiresAt,
   };
 }
 
@@ -494,6 +579,12 @@ async function findReusablePendingPayment(input: CreatePaymentIntentInput) {
     purpose: input.purpose,
     status: "pending",
   };
+
+  if (input.pendingReuseKey) {
+    filter["metadata.pendingReuseKey"] = input.pendingReuseKey;
+  } else if (input.purpose === "seeker_post_fee") {
+    return null;
+  }
 
   if (input.listingId) {
     filter.listingId = input.listingId;
@@ -640,6 +731,132 @@ async function applySeekerRequestUnlockEffect(payment: WithId<PaymentDocument>) 
   });
 }
 
+async function applySeekerRequestPostEffect(payment: WithId<PaymentDocument>) {
+  const payments = await getCollection("payments");
+  const seekerRequests = await getCollection("seekerRequests");
+  const auditLogs = await getCollection("auditLogs");
+  const publishTimestamp = payment.settledAt ?? new Date();
+  const draft = getSeekerRequestDraftFromPayment(payment);
+  const requestId = payment.seekerRequestId ?? payment._id;
+  let seekerRequest = await seekerRequests.findOne({
+    _id: requestId,
+  });
+
+  if (!seekerRequest && payment.seekerRequestId) {
+    throw new Error("The linked seeker request could not be found while applying the payment result.");
+  }
+
+  if (!seekerRequest) {
+    const requestDocument: WithId<SeekerRequestDocument> = {
+      _id: requestId,
+      requesterUserId: payment.userId,
+      category: draft.category,
+      title: draft.title,
+      details: draft.details,
+      budgetMinRwf: draft.budgetMinRwf,
+      budgetMaxRwf: draft.budgetMaxRwf,
+      quantityLabel: draft.quantityLabel,
+      preferredContactTime: draft.preferredContactTime,
+      status: "active",
+      durationDays: draft.durationDays,
+      approximateAreaLabel: draft.approximateAreaLabel,
+      district: draft.district,
+      sector: draft.sector,
+      contactName: draft.contactName,
+      contactPhone: draft.contactPhone,
+      postedFeeRwf: draft.postedFeeRwf,
+      viewTokenFeeRwf: draft.viewTokenFeeRwf,
+      expiresAt: draft.expiresAt,
+      createdAt: publishTimestamp,
+      updatedAt: publishTimestamp,
+    };
+
+    await seekerRequests.insertOne(requestDocument);
+    seekerRequest = requestDocument;
+
+    await auditLogs.insertOne({
+      actorUserId: payment.userId,
+      entityType: "seeker_request",
+      entityId: requestId.toString(),
+      action: "seeker_request_created",
+      metadata: {
+        category: requestDocument.category,
+        durationDays: requestDocument.durationDays,
+        postedFeeRwf: requestDocument.postedFeeRwf,
+        paymentReference: payment.reference,
+      },
+      createdAt: publishTimestamp,
+      updatedAt: publishTimestamp,
+    });
+
+    await createNotification({
+      userId: payment.userId,
+      kind: "seeker_request_created",
+      severity: "success",
+      title: "Seeker request posted",
+      body: `${requestDocument.title} is now live on the demand board.`,
+      entityType: "seeker_request",
+      entityId: requestId.toString(),
+      link: "/dashboard#notifications",
+    });
+
+    await notifyUsersByRoles(adminRoles, {
+      kind: "seeker_request_created",
+      severity: "info",
+      title: "New seeker request posted",
+      body: `${requestDocument.title} is now visible on the demand board.`,
+      entityType: "seeker_request",
+      entityId: requestId.toString(),
+      link: "/admin#notifications",
+    });
+  }
+
+  if (!seekerRequest) {
+    throw new Error("Could not publish the seeker request after payment settlement.");
+  }
+
+  const nextReturnPath = `/seeker-requests/${requestId.toString()}`;
+  const nextMetadata = mergeMetadata(payment.metadata, {
+    seekerRequestId: requestId.toString(),
+    title: seekerRequest.title,
+    returnPath: nextReturnPath,
+    paymentEffect: "seeker_request_posted",
+  });
+
+  await payments.updateOne(
+    {
+      _id: payment._id,
+    },
+    {
+      $set: {
+        seekerRequestId: requestId,
+        returnPath: nextReturnPath,
+        metadata: nextMetadata,
+        updatedAt: new Date(),
+      },
+    },
+  );
+
+  await createPaymentAuditLog({
+    actorUserId: payment.userId,
+    action: "payment_paid_effect_applied",
+    payment: {
+      _id: payment._id,
+      reference: payment.reference,
+      purpose: payment.purpose,
+      amountRwf: payment.amountRwf,
+      status: payment.status,
+      listingId: payment.listingId,
+      seekerRequestId: requestId,
+    },
+    metadata: {
+      effect: "seeker_request_posted",
+      seekerRequestId: requestId.toString(),
+      returnPath: nextReturnPath,
+    },
+  });
+}
+
 async function applyPaidPaymentEffects(payment: WithId<PaymentDocument>) {
   switch (payment.purpose) {
     case "token_fee":
@@ -647,6 +864,9 @@ async function applyPaidPaymentEffects(payment: WithId<PaymentDocument>) {
       return;
     case "seeker_view_token":
       await applySeekerRequestUnlockEffect(payment);
+      return;
+    case "seeker_post_fee":
+      await applySeekerRequestPostEffect(payment);
       return;
     default:
       return;
@@ -746,6 +966,7 @@ export async function createPaymentIntent(input: CreatePaymentIntentInput): Prom
     idempotencyKey: buildIdempotencyKey(),
     metadata: mergeMetadata(input.metadata, {
       checkoutMode,
+      pendingReuseKey: input.pendingReuseKey,
     }),
     createdAt: now,
     updatedAt: now,
@@ -1044,6 +1265,89 @@ export async function completeMockPaymentForSession(
   });
 }
 
+export async function applyAdminManualPaymentStatus(
+  session: AuthSession,
+  reference: string,
+  status: Extract<PaymentStatus, "paid" | "failed" | "cancelled">,
+  reviewNote?: string,
+) {
+  const reviewer = await ensureUserRecord(session);
+  const payments = await getCollection("payments");
+  const existingPayment = await payments.findOne({
+    reference,
+  });
+
+  if (!existingPayment) {
+    throw new Error("The selected payment reference could not be found.");
+  }
+
+  if (existingPayment.status === "paid" && status !== "paid") {
+    throw new Error("Paid payments cannot be manually reversed.");
+  }
+
+  const result = await transitionPaymentStatusByReference({
+    reference,
+    status,
+    source: "admin_manual_review",
+    actorUserId: reviewer._id,
+    lastProviderStatus: existingPayment.lastProviderStatus,
+    failureReason:
+      status === "failed"
+        ? reviewNote ?? existingPayment.failureReason ?? "Marked as failed during manual review."
+        : status === "cancelled"
+          ? reviewNote ?? existingPayment.failureReason ?? "Cancelled during manual review."
+          : undefined,
+    metadata: reviewNote
+      ? {
+          reviewNote,
+          reviewedByName: reviewer.fullName,
+          reviewedByRole: reviewer.role,
+        }
+      : {
+          reviewedByName: reviewer.fullName,
+          reviewedByRole: reviewer.role,
+        },
+  });
+
+  await createPaymentAuditLog({
+    actorUserId: reviewer._id,
+    action: "payment_manual_reviewed",
+    payment: result.payment,
+    metadata: {
+      previousStatus: existingPayment.status,
+      reviewedStatus: status,
+      reviewNote,
+    },
+  });
+
+  if (existingPayment.status !== result.payment.status || reviewNote) {
+    const label = getPaymentLabel(result.payment) ?? result.payment.reference;
+    const nextLink = getPaymentReturnPath(result.payment);
+    const statusMessage =
+      status === "paid"
+        ? `${label} was manually confirmed as paid by the admin team.`
+        : status === "failed"
+          ? `${label} was manually marked as failed during payment review.`
+          : `${label} was manually cancelled during payment review.`;
+
+    await createNotification({
+      userId: result.payment.userId,
+      kind: "payment_status_changed",
+      severity: status === "paid" ? "success" : "warning",
+      title: status === "paid" ? "Payment confirmed manually" : "Payment updated during review",
+      body: reviewNote ? `${statusMessage} Note: ${reviewNote}` : statusMessage,
+      entityType: "payment",
+      entityId: result.payment._id.toString(),
+      link: nextLink,
+    });
+  }
+
+  return {
+    payment: result.payment,
+    previousStatus: existingPayment.status,
+  };
+}
+
 export async function getAdminPaymentOverviewData(): Promise<AdminPaymentOverviewData> {
   const payments = await getCollection("payments");
   const auditLogs = await getCollection("auditLogs");
@@ -1058,7 +1362,7 @@ export async function getAdminPaymentOverviewData(): Promise<AdminPaymentOvervie
     auditLogs
       .find({
         entityType: "payment",
-        action: { $in: ["payment_record_created", "payment_intent_created", "payment_status_updated"] },
+        action: { $in: ["payment_record_created", "payment_intent_created", "payment_status_updated", "payment_manual_reviewed", "payment_paid_effect_applied"] },
       })
       .sort({ createdAt: -1 })
       .limit(12)

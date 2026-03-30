@@ -67,6 +67,14 @@ function serializePayment(
   listingMap: Map<string, WithId<ListingDocument>>,
 ): BuyerPaymentSummary {
   const linkedListing = payment.listingId ? listingMap.get(payment.listingId.toString()) : null;
+  const metadataTitle = typeof payment.metadata?.title === "string"
+    ? payment.metadata.title
+    : typeof payment.metadata?.listingTitle === "string"
+      ? payment.metadata.listingTitle
+      : null;
+  const linkedPath = payment.listingId
+    ? `/listings/${payment.listingId.toString()}`
+    : payment.returnPath ?? null;
 
   return {
     id: payment._id.toString(),
@@ -75,8 +83,8 @@ function serializePayment(
     amountRwf: payment.amountRwf,
     status: payment.status,
     listingId: payment.listingId?.toString() ?? null,
-    linkedLabel: linkedListing?.title ?? (payment.listingId ? `Listing ${payment.listingId.toString()}` : null),
-    linkedPath: payment.listingId ? `/listings/${payment.listingId.toString()}` : null,
+    linkedLabel: linkedListing?.title ?? metadataTitle ?? (payment.listingId ? `Listing ${payment.listingId.toString()}` : null),
+    linkedPath,
     checkoutPath: payment.checkoutUrl ?? null,
     checkoutExpiresAt: payment.checkoutExpiresAt?.toISOString() ?? null,
     createdAt: payment.createdAt.toISOString(),
@@ -93,7 +101,7 @@ export async function getBuyerWorkspaceData(session: AuthSession): Promise<Buyer
   const now = new Date();
   const activePendingPaymentFilter = {
     userId: user._id,
-    purpose: "token_fee" as const,
+    purpose: { $in: ["token_fee", "seeker_post_fee"] as const },
     status: "pending" as const,
     $or: [{ checkoutExpiresAt: { $gt: now } }, { checkoutExpiresAt: { $exists: false } }],
   };
@@ -108,7 +116,7 @@ export async function getBuyerWorkspaceData(session: AuthSession): Promise<Buyer
   const recentPayments = await payments
     .find({
       userId: user._id,
-      purpose: "token_fee",
+      purpose: { $in: ["token_fee", "seeker_post_fee"] as const },
     })
     .sort({ createdAt: -1 })
     .limit(10)
@@ -141,7 +149,7 @@ export async function getBuyerWorkspaceData(session: AuthSession): Promise<Buyer
       {
         $match: {
           userId: user._id,
-          purpose: "token_fee",
+          purpose: { $in: ["token_fee", "seeker_post_fee"] as const },
           status: "paid",
         },
       },

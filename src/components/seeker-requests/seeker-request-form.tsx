@@ -1,7 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 import { listingCategories, seekerRequestDurations, type ListingCategory, type SeekerRequestDurationDays } from "@/lib/domain";
 import type { FeeSettingsSummary } from "@/lib/fee-settings/workflow";
@@ -12,11 +11,28 @@ type CreateSeekerRequestResponse = {
   status: "ok" | "error";
   message?: string;
   errors?: string[];
-  requestId?: string;
+  checkoutUrl?: string | null;
+  paymentReference?: string;
+  reused?: boolean;
 };
 
+type SeekerRequestDraftState = {
+  category: ListingCategory;
+  title: string;
+  details: string;
+  budgetMinRwf: string;
+  budgetMaxRwf: string;
+  quantityLabel: string;
+  approximateAreaLabel: string;
+  district: string;
+  sector: string;
+  preferredContactTime: string;
+  durationDays: SeekerRequestDurationDays;
+};
+
+const draftStorageKey = "getownerinfo:seeker-request-draft";
+
 export function SeekerRequestForm({ feeSettings }: { feeSettings: FeeSettingsSummary }) {
-  const router = useRouter();
   const [category, setCategory] = useState<ListingCategory>("real_estate_rent");
   const [title, setTitle] = useState("");
   const [details, setDetails] = useState("");
@@ -30,8 +46,104 @@ export function SeekerRequestForm({ feeSettings }: { feeSettings: FeeSettingsSum
   const [durationDays, setDurationDays] = useState<SeekerRequestDurationDays>(14);
   const [error, setError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [hasHydratedDraft, setHasHydratedDraft] = useState(false);
   const [isPending, startTransition] = useTransition();
   const postFeeRwf = feeSettings.seekerPostFeeByDuration[String(durationDays) as keyof FeeSettingsSummary["seekerPostFeeByDuration"]];
+
+  useEffect(() => {
+    try {
+      const storedDraft = window.localStorage.getItem(draftStorageKey);
+
+      if (!storedDraft) {
+        return;
+      }
+
+      const draft = JSON.parse(storedDraft) as Partial<SeekerRequestDraftState>;
+
+      if (draft.category && listingCategories.includes(draft.category)) {
+        setCategory(draft.category);
+      }
+
+      if (typeof draft.title === "string") {
+        setTitle(draft.title);
+      }
+
+      if (typeof draft.details === "string") {
+        setDetails(draft.details);
+      }
+
+      if (typeof draft.budgetMinRwf === "string") {
+        setBudgetMinRwf(draft.budgetMinRwf);
+      }
+
+      if (typeof draft.budgetMaxRwf === "string") {
+        setBudgetMaxRwf(draft.budgetMaxRwf);
+      }
+
+      if (typeof draft.quantityLabel === "string") {
+        setQuantityLabel(draft.quantityLabel);
+      }
+
+      if (typeof draft.approximateAreaLabel === "string") {
+        setApproximateAreaLabel(draft.approximateAreaLabel);
+      }
+
+      if (typeof draft.district === "string") {
+        setDistrict(draft.district);
+      }
+
+      if (typeof draft.sector === "string") {
+        setSector(draft.sector);
+      }
+
+      if (typeof draft.preferredContactTime === "string") {
+        setPreferredContactTime(draft.preferredContactTime);
+      }
+
+      if (draft.durationDays && seekerRequestDurations.includes(draft.durationDays)) {
+        setDurationDays(draft.durationDays);
+      }
+    } catch {
+      window.localStorage.removeItem(draftStorageKey);
+    } finally {
+      setHasHydratedDraft(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hasHydratedDraft) {
+      return;
+    }
+
+    const draft: SeekerRequestDraftState = {
+      category,
+      title,
+      details,
+      budgetMinRwf,
+      budgetMaxRwf,
+      quantityLabel,
+      approximateAreaLabel,
+      district,
+      sector,
+      preferredContactTime,
+      durationDays,
+    };
+
+    window.localStorage.setItem(draftStorageKey, JSON.stringify(draft));
+  }, [
+    approximateAreaLabel,
+    budgetMaxRwf,
+    budgetMinRwf,
+    category,
+    details,
+    district,
+    durationDays,
+    preferredContactTime,
+    quantityLabel,
+    sector,
+    title,
+    hasHydratedDraft,
+  ]);
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -67,8 +179,12 @@ export function SeekerRequestForm({ feeSettings }: { feeSettings: FeeSettingsSum
             throw new Error(payload.message ?? "Could not create the seeker request.");
           }
 
-          router.push("/dashboard");
-          router.refresh();
+          if (payload.checkoutUrl) {
+            window.location.assign(payload.checkoutUrl);
+            return;
+          }
+
+          throw new Error("A payment checkout could not be created for this seeker request.");
         } catch (nextError) {
           setError(nextError instanceof Error ? nextError.message : "Could not create the seeker request.");
         }

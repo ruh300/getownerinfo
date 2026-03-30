@@ -4,6 +4,7 @@ type PaymentReturnNoticeProps = {
   status: PaymentReturnStatus;
   reference?: string | null;
   subject: string;
+  bodyOverride?: string;
 };
 
 const noticeStyles: Record<
@@ -41,14 +42,14 @@ const noticeStyles: Record<
   },
 };
 
-export function PaymentReturnNotice({ status, reference, subject }: PaymentReturnNoticeProps) {
+export function PaymentReturnNotice({ status, reference, subject, bodyOverride }: PaymentReturnNoticeProps) {
   const styles = noticeStyles[status];
 
   return (
     <div className={`rounded-2xl border px-4 py-3 text-sm leading-6 ${styles.border} ${styles.background}`}>
       <p className="font-semibold">{styles.heading}</p>
       <p className="mt-1">
-        {subject}: {styles.body}
+        {subject}: {bodyOverride ?? styles.body}
       </p>
       {reference ? <p className="mt-2 text-xs uppercase tracking-[0.12em] opacity-80">Reference {reference}</p> : null}
     </div>

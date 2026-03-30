@@ -14,7 +14,7 @@ This project is optimized for a low-cost MVP:
 - `listings`: listing creation, browsing, approval states
 - `listing-lifecycle`: owner-side status transitions after approval, plus buyer/admin visibility for those changes
 - `chat`: listing inquiries, blocked pre-unlock content, and post-unlock reply threads
-- `payments`: payment intents, hosted mock or AfrIPay checkout handoff, legacy form-post callback/webhook settlement, payment-transition audit logs, and payment-state UI feedback
+- `payments`: payment intents, hosted mock or AfrIPay checkout handoff, legacy form-post callback/webhook settlement, manual admin reconciliation, payment-transition audit logs, and payment-state UI feedback
 - `token-unlocks`: immutable unlock records
 - `admin`: verification, fees, penalties, audit visibility
 - `fee-settings`: admin-controlled fee matrix for listing unlocks and seeker pricing
@@ -57,7 +57,7 @@ Collections to start with:
 - `src/lib/formatting/text.ts`: shared enum humanization and category labels
 - `src/lib/data/collections.ts`: typed MongoDB collection access and starter indexes
 - `src/lib/fee-settings/workflow.ts`: default fee matrix, Mongo-backed settings retrieval, and fee resolution helpers
-- `src/lib/payments/workflow.ts`: centralized payment records, pending checkout intents, legacy AfrIPay handoff payloads, idempotent settlement, unlock effects, payment-transition audit logs, and admin payment analytics
+- `src/lib/payments/workflow.ts`: centralized payment records, pending checkout intents, legacy AfrIPay handoff payloads, idempotent settlement, unlock and seeker-post publish effects, admin reconciliation, payment-transition audit logs, and admin payment analytics
 - `src/lib/payments/afripay.ts`: server-only AfrIPay credential resolution, safe config summaries, checkout endpoint probing, and legacy contract helpers
 - `src/app/api/payments/callback/afripay/route.ts` and `src/app/api/payments/webhooks/afripay/route.ts`: shared-validation settlement entry points using the common route-input layer, legacy `client_token` fallback support, and AfrIPay status mapping
 - `src/lib/notifications/workflow.ts`: centralized in-app notification creation, unread counts, and notification center data
@@ -98,3 +98,4 @@ MongoDB Atlas requires both of the following:
 - Keep abuse controls close to write routes and prefer durable rate limits over in-memory counters on Vercel
 - Require authenticated owner-side sessions before issuing upload signatures for listing media or ownership proofs
 - Treat any payment credentials discovered in frontend-delivered templates as compromised until rotated
+- Keep paid payments effectively immutable from the admin UI; allow manual confirmation for ambiguous pending flows without implementing unsafe reversal logic

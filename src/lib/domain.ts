@@ -80,6 +80,7 @@ export const notificationKinds = [
   "seeker_request_fulfilled",
   "seeker_request_closed",
   "seeker_match_message_received",
+  "payment_status_changed",
 ] as const;
 export type NotificationKind = (typeof notificationKinds)[number];
 

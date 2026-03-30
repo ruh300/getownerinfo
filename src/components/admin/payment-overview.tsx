@@ -1,3 +1,4 @@
+import { PaymentReviewActions } from "@/components/admin/payment-review-actions";
 import { formatRwf } from "@/lib/formatting/currency";
 import { formatDateTime } from "@/lib/formatting/date";
 import { humanizeEnum } from "@/lib/formatting/text";
@@ -5,6 +6,7 @@ import type { AdminPaymentOverviewData } from "@/lib/payments/workflow";
 
 type PaymentOverviewProps = {
   overview: AdminPaymentOverviewData;
+  canManagePayments: boolean;
 };
 
 function getPaymentStatusBadgeClass(status: "pending" | "paid" | "failed" | "cancelled" | null) {
@@ -23,7 +25,7 @@ function getPaymentStatusBadgeClass(status: "pending" | "paid" | "failed" | "can
   return "border-[rgba(184,50,50,0.18)] bg-[rgba(184,50,50,0.08)] text-[#9c2d2d]";
 }
 
-export function PaymentOverview({ overview }: PaymentOverviewProps) {
+export function PaymentOverview({ overview, canManagePayments }: PaymentOverviewProps) {
   return (
     <section className="space-y-6">
       <div>
@@ -120,6 +122,11 @@ export function PaymentOverview({ overview }: PaymentOverviewProps) {
                         ? "Payment failed before settlement"
                         : "Not settled yet"}
                 </p>
+                <PaymentReviewActions
+                  reference={payment.reference}
+                  currentStatus={payment.status}
+                  canManagePayments={canManagePayments}
+                />
               </article>
             ))}
           </div>

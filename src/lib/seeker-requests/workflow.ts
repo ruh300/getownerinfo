@@ -1,7 +1,9 @@
+import { createHash } from "node:crypto";
+
 import { ObjectId, type Filter, type WithId } from "mongodb";
 
 import type { AuthSession } from "@/lib/auth/types";
-import { adminRoles, canCreateListings } from "@/lib/auth/types";
+import { canCreateListings } from "@/lib/auth/types";
 import { ensureUserRecord } from "@/lib/auth/user-record";
 import { getCollection } from "@/lib/data/collections";
 import {
@@ -17,8 +19,7 @@ import {
   resolveSeekerPostFeeRwf,
   resolveSeekerViewTokenFeeRwf,
 } from "@/lib/fee-settings/workflow";
-import { createPaymentRecord } from "@/lib/payments/workflow";
-import { createNotification, notifyUsersByRoles } from "@/lib/notifications/workflow";
+import { createPaymentIntent } from "@/lib/payments/workflow";
 import { getSeekerResponseCountsForRequester } from "@/lib/seeker-requests/responses";
 
 export type BuyerSeekerRequestSummary = {
@@ -237,6 +238,36 @@ function serializePublicRequestDetail(request: WithId<SeekerRequestDocument>): P
   };
 }
 
+function buildSeekerRequestPendingReuseKey(
+  userId: ObjectId,
+  contactPhone: string,
+  value: {
+    category: ListingCategory;
+    title: string;
+    details: string;
+    budgetMinRwf: number;
+    budgetMaxRwf: number;
+    quantityLabel: string;
+    preferredContactTime: string;
+    approximateAreaLabel: string;
+    district?: string;
+    sector?: string;
+    durationDays: SeekerRequestDurationDays;
+  },
+) {
+  const hash = createHash("sha256");
+
+  hash.update(
+    JSON.stringify({
+      requesterUserId: userId.toString(),
+      contactPhone,
+      ...value,
+    }),
+  );
+
+  return `seeker-post:${hash.digest("hex").slice(0, 32)}`;
+}
+
 export async function createSeekerRequestForSession(session: AuthSession, payload: Record<string, unknown>) {
   if (session.user.role !== "buyer") {
     throw new Error("Only buyer accounts can create seeker requests right now.");
@@ -255,90 +286,47 @@ export async function createSeekerRequestForSession(session: AuthSession, payloa
     return validation;
   }
 
-  const seekerRequests = await getCollection("seekerRequests");
-  const auditLogs = await getCollection("auditLogs");
   const now = new Date();
   const feeSettings = await getFeeSettingsSummary();
   const postedFeeRwf = resolveSeekerPostFeeRwf(feeSettings, validation.value.durationDays);
+  const viewTokenFeeRwf = resolveSeekerViewTokenFeeRwf(feeSettings);
   const expiresAt = new Date(now.getTime() + validation.value.durationDays * 24 * 60 * 60 * 1000);
-  const requestDocument: Omit<SeekerRequestDocument, "_id"> = {
-    requesterUserId: user._id,
-    category: validation.value.category,
-    title: validation.value.title,
-    details: validation.value.details,
-    budgetMinRwf: validation.value.budgetMinRwf,
-    budgetMaxRwf: validation.value.budgetMaxRwf,
-    quantityLabel: validation.value.quantityLabel,
-    preferredContactTime: validation.value.preferredContactTime,
-    status: "active",
-    durationDays: validation.value.durationDays,
-    approximateAreaLabel: validation.value.approximateAreaLabel,
-    district: validation.value.district,
-    sector: validation.value.sector,
-    contactName: user.fullName,
-    contactPhone,
-    postedFeeRwf,
-    viewTokenFeeRwf: resolveSeekerViewTokenFeeRwf(feeSettings),
-    expiresAt,
-    createdAt: now,
-    updatedAt: now,
-  };
-  const insertResult = await seekerRequests.insertOne(requestDocument);
-
-  await createPaymentRecord({
+  const pendingReuseKey = buildSeekerRequestPendingReuseKey(user._id, contactPhone, validation.value);
+  const paymentIntent = await createPaymentIntent({
     userId: user._id,
-    seekerRequestId: insertResult.insertedId,
     amountRwf: postedFeeRwf,
     purpose: "seeker_post_fee",
+    relatedEntityId: user._id.toString(),
+    returnPath: "/seeker-requests/new",
     referencePrefix: "SEEK",
+    pendingReuseKey,
     metadata: {
-      flow: "prototype_seeker_request_post",
-      category: requestDocument.category,
-      durationDays: requestDocument.durationDays,
-    },
-  });
-
-  await auditLogs.insertOne({
-    actorUserId: user._id,
-    entityType: "seeker_request",
-    entityId: insertResult.insertedId.toString(),
-    action: "seeker_request_created",
-    metadata: {
-      category: requestDocument.category,
-      durationDays: requestDocument.durationDays,
+      flow: "afripay_seeker_request_post",
+      category: validation.value.category,
+      title: validation.value.title,
+      details: validation.value.details,
+      budgetMinRwf: validation.value.budgetMinRwf,
+      budgetMaxRwf: validation.value.budgetMaxRwf,
+      quantityLabel: validation.value.quantityLabel,
+      preferredContactTime: validation.value.preferredContactTime,
+      approximateAreaLabel: validation.value.approximateAreaLabel,
+      district: validation.value.district,
+      sector: validation.value.sector,
+      durationDays: validation.value.durationDays,
+      contactName: user.fullName,
+      contactPhone,
       postedFeeRwf,
+      viewTokenFeeRwf,
+      expiresAt: expiresAt.toISOString(),
+      pendingReuseKey,
     },
-    createdAt: now,
-    updatedAt: now,
-  });
-
-  await createNotification({
-    userId: user._id,
-    kind: "seeker_request_created",
-    severity: "success",
-    title: "Seeker request posted",
-    body: `${requestDocument.title} is now live on the demand board.`,
-    entityType: "seeker_request",
-    entityId: insertResult.insertedId.toString(),
-    link: "/dashboard#notifications",
-  });
-
-  await notifyUsersByRoles(adminRoles, {
-    kind: "seeker_request_created",
-    severity: "info",
-    title: "New seeker request posted",
-    body: `${requestDocument.title} is now visible on the demand board.`,
-    entityType: "seeker_request",
-    entityId: insertResult.insertedId.toString(),
-    link: "/admin#notifications",
   });
 
   return {
     ok: true as const,
-    request: {
-      ...requestDocument,
-      _id: insertResult.insertedId,
-    },
+    checkoutUrl: paymentIntent.checkoutUrl,
+    paymentReference: paymentIntent.payment.reference,
+    reused: paymentIntent.reused,
   };
 }
 

@@ -160,7 +160,7 @@ export default async function AdminPage() {
         </>
       ) : null}
 
-      {paymentOverview ? <PaymentOverview overview={paymentOverview} /> : null}
+      {paymentOverview ? <PaymentOverview overview={paymentOverview} canManagePayments={canConfigureFees(session.user.role)} /> : null}
 
       {feeSettings ? <FeeSettingsPanel settings={feeSettings} canEdit={canConfigureFees(session.user.role)} /> : null}
     </main>
