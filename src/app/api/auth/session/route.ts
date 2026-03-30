@@ -3,6 +3,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { sanitizeRedirectPath } from "@/lib/auth/redirects";
 import { applySessionCookie, clearSessionCookie, getCurrentSession } from "@/lib/auth/session";
 import { getDefaultRedirectForRole, isUserRole, type AuthUser } from "@/lib/auth/types";
+import { getOptionalTrimmedString, getRouteErrorResponse, readJsonObjectBody, RouteInputError } from "@/lib/http/route-input";
+import {
+  applyRateLimitHeaders,
+  consumeRateLimit,
+  createRateLimitErrorResponse,
+  getClientIpAddress,
+} from "@/lib/security/rate-limit";
 
 type SessionRequestBody = {
   fullName?: unknown;
@@ -12,31 +19,28 @@ type SessionRequestBody = {
   redirectTo?: unknown;
 };
 
-function normalizeInput(value: unknown) {
-  return typeof value === "string" ? value.trim() : "";
-}
-
 function buildUserFromBody(body: SessionRequestBody): AuthUser {
-  const fullName = normalizeInput(body.fullName);
-  const phone = normalizeInput(body.phone);
-  const email = normalizeInput(body.email);
+  const normalizedBody = body as Record<string, unknown>;
+  const fullName = getOptionalTrimmedString(normalizedBody, "fullName") ?? "";
+  const phone = getOptionalTrimmedString(normalizedBody, "phone") ?? "";
+  const email = getOptionalTrimmedString(normalizedBody, "email");
 
   if (fullName.length < 2) {
-    throw new Error("Enter a full name with at least 2 characters.");
+    throw new RouteInputError("Enter a full name with at least 2 characters.");
   }
 
   if (phone.length < 6) {
-    throw new Error("Enter a phone number with at least 6 characters.");
+    throw new RouteInputError("Enter a phone number with at least 6 characters.");
   }
 
   if (!isUserRole(body.role)) {
-    throw new Error("Choose a valid role.");
+    throw new RouteInputError("Choose a valid role.");
   }
 
   return {
     fullName,
     phone,
-    email: email || undefined,
+    email,
     role: body.role,
   };
 }
@@ -51,8 +55,22 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  let rateLimit: Awaited<ReturnType<typeof consumeRateLimit>> | null = null;
+
   try {
-    const body = (await request.json()) as SessionRequestBody;
+    rateLimit = await consumeRateLimit({
+      action: "auth_session_create",
+      scope: "ip",
+      identifier: getClientIpAddress(request),
+      max: 8,
+      windowMs: 15 * 60 * 1000,
+    });
+
+    if (!rateLimit.allowed) {
+      return createRateLimitErrorResponse(rateLimit, "Too many sign-in attempts from this network. Try again in a few minutes.");
+    }
+
+    const body = (await readJsonObjectBody(request)) as SessionRequestBody;
     const user = buildUserFromBody(body);
     const fallbackRedirect = getDefaultRedirectForRole(user.role);
     const redirectTo = sanitizeRedirectPath(body.redirectTo, fallbackRedirect);
@@ -69,15 +87,18 @@ export async function POST(request: NextRequest) {
 
     applySessionCookie(response, user);
 
-    return response;
+    return applyRateLimitHeaders(response, rateLimit);
   } catch (error) {
-    return NextResponse.json(
+    const routeError = getRouteErrorResponse(error, "Could not start the session.");
+    const response = NextResponse.json(
       {
         status: "error",
-        message: error instanceof Error ? error.message : "Could not start the session.",
+        message: routeError.message,
       },
-      { status: 400 },
+      { status: routeError.statusCode },
     );
+
+    return rateLimit ? applyRateLimitHeaders(response, rateLimit) : response;
   }
 }
 

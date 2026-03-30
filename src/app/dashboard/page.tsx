@@ -3,6 +3,7 @@ import Link from "next/link";
 import { OwnerConversationInbox } from "@/components/chat/owner-conversation-inbox";
 import { ListingStatusManager } from "@/components/listings/listing-status-manager";
 import { NotificationCenter } from "@/components/notifications/notification-center";
+import { PendingPaymentList } from "@/components/payments/pending-payment-list";
 import { SeekerMatchConversationList } from "@/components/seeker-requests/seeker-match-conversation-list";
 import { SeekerResponseList } from "@/components/seeker-requests/seeker-response-list";
 import { requireSession } from "@/lib/auth/session";
@@ -127,13 +128,13 @@ export default async function DashboardPage() {
 
         <article className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Listings</p>
-          <h2 className="mt-3 font-[var(--font-display)] text-2xl">{showOwnerWorkspace ? "Owner-ready workspace" : "Buyer-ready workspace"}</h2>
-          <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
-            {showOwnerWorkspace
-              ? "Owner and manager roles can now save drafts, submit them for review, track listing status, and monitor incoming buyer inquiries."
-              : "Buyer sessions now track unlock history, prototype token-fee payments, seeker requests, and recommended verified listings."}
-          </p>
-        </article>
+            <h2 className="mt-3 font-[var(--font-display)] text-2xl">{showOwnerWorkspace ? "Owner-ready workspace" : "Buyer-ready workspace"}</h2>
+            <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
+              {showOwnerWorkspace
+                ? "Owner and manager roles can now save drafts, submit them for review, track listing status, and monitor incoming buyer inquiries."
+                : "Buyer sessions now track unlock history, pending checkout intents, settled payment records, seeker requests, and recommended verified listings."}
+            </p>
+          </article>
 
         <article className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Operations</p>
@@ -325,42 +326,44 @@ export default async function DashboardPage() {
 
       {buyerWorkspace ? (
         <>
-          <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-6">
-            <article className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
-              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Unlocks</p>
-              <h2 className="mt-3 font-[var(--font-display)] text-4xl">{buyerWorkspace.stats.unlockCount}</h2>
-              <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Listings you have already unlocked.</p>
-            </article>
-            <article className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
-              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Spent</p>
-              <h2 className="mt-3 font-[var(--font-display)] text-4xl">{formatRwf(buyerWorkspace.stats.totalSpentRwf)}</h2>
-              <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Prototype token-fee payments recorded in your account.</p>
-            </article>
-            <article className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
-              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Active contacts</p>
-              <h2 className="mt-3 font-[var(--font-display)] text-4xl">{buyerWorkspace.stats.activeUnlockCount}</h2>
-              <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Unlocked listings that are still active right now.</p>
-            </article>
-            <article className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
-              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Payments</p>
-              <h2 className="mt-3 font-[var(--font-display)] text-4xl">{buyerWorkspace.stats.paymentCount}</h2>
-              <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Recorded token-fee payment events.</p>
-            </article>
-            <article className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
-              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Seeker posts</p>
-              <h2 className="mt-3 font-[var(--font-display)] text-4xl">{buyerWorkspace.stats.seekerRequestCount}</h2>
+            <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-6">
+              <article className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
+                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Unlocks</p>
+                <h2 className="mt-3 font-[var(--font-display)] text-4xl">{buyerWorkspace.stats.unlockCount}</h2>
+                <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Listings you have already unlocked.</p>
+              </article>
+              <article className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
+                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Spent</p>
+                <h2 className="mt-3 font-[var(--font-display)] text-4xl">{formatRwf(buyerWorkspace.stats.totalSpentRwf)}</h2>
+                <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Settled unlock payments recorded in your account.</p>
+              </article>
+              <article className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
+                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Active contacts</p>
+                <h2 className="mt-3 font-[var(--font-display)] text-4xl">{buyerWorkspace.stats.activeUnlockCount}</h2>
+                <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Unlocked listings that are still active right now.</p>
+              </article>
+              <article className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
+                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Pending checkout</p>
+                <h2 className="mt-3 font-[var(--font-display)] text-4xl">{buyerWorkspace.stats.pendingPaymentCount}</h2>
+                <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Unlocks waiting for payment confirmation.</p>
+              </article>
+              <article className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
+                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Seeker posts</p>
+                <h2 className="mt-3 font-[var(--font-display)] text-4xl">{buyerWorkspace.stats.seekerRequestCount}</h2>
               <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Requests you have published to the demand board.</p>
             </article>
             <article className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
               <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Live demand</p>
               <h2 className="mt-3 font-[var(--font-display)] text-4xl">{buyerWorkspace.stats.activeSeekerRequestCount}</h2>
               <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Active seeker requests still visible publicly.</p>
-            </article>
-          </section>
+              </article>
+            </section>
 
-          <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-            <section className="space-y-4">
-              <div className="flex items-center justify-between gap-3">
+            <PendingPaymentList payments={buyerWorkspace.pendingPayments} />
+
+            <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+              <section className="space-y-4">
+                <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Unlock history</p>
                   <h2 className="mt-2 font-[var(--font-display)] text-3xl">Recently unlocked listings</h2>
@@ -375,7 +378,7 @@ export default async function DashboardPage() {
 
               {buyerWorkspace.unlockedListings.length === 0 ? (
                 <div className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 text-sm leading-6 text-[var(--muted)] shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
-                  You have not unlocked any listings yet. Open a verified listing and use the prototype unlock flow to create your first buyer record.
+                  You have not unlocked any listings yet. Open a verified listing and complete the checkout flow to reveal your first owner contact.
                 </div>
               ) : (
                 buyerWorkspace.unlockedListings.map((listing) => (
@@ -421,40 +424,71 @@ export default async function DashboardPage() {
               )}
             </section>
 
-            <section className="space-y-4">
-              <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Payment ledger</p>
-                <h2 className="mt-2 font-[var(--font-display)] text-3xl">Recent token-fee activity</h2>
-              </div>
-
-              {buyerWorkspace.recentPayments.length === 0 ? (
-                <div className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 text-sm leading-6 text-[var(--muted)] shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
-                  No token-fee payments have been recorded yet.
+              <section className="space-y-4">
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Payment ledger</p>
+                  <h2 className="mt-2 font-[var(--font-display)] text-3xl">Recent unlock payment activity</h2>
                 </div>
-              ) : (
-                buyerWorkspace.recentPayments.map((payment) => (
-                  <article
-                    key={payment.id}
+
+                {buyerWorkspace.recentPayments.length === 0 ? (
+                  <div className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 text-sm leading-6 text-[var(--muted)] shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
+                    No unlock payment records have been created yet.
+                  </div>
+                ) : (
+                  buyerWorkspace.recentPayments.map((payment) => (
+                    <article
+                      key={payment.id}
                     className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_12px_32px_rgba(0,0,0,0.06)]"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">
-                          {humanizeEnum(payment.purpose)}
-                        </p>
-                        <h3 className="mt-2 font-semibold text-[var(--foreground)]">{formatRwf(payment.amountRwf)}</h3>
+                          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">
+                            {humanizeEnum(payment.purpose)}
+                          </p>
+                          <h3 className="mt-2 font-semibold text-[var(--foreground)]">{formatRwf(payment.amountRwf)}</h3>
+                        </div>
+                        <div
+                          className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] ${
+                            payment.status === "paid"
+                              ? "border-[rgba(26,122,74,0.18)] bg-[rgba(26,122,74,0.08)] text-[var(--primary)]"
+                              : payment.status === "pending"
+                                ? "border-[rgba(200,134,10,0.2)] bg-[rgba(200,134,10,0.08)] text-[var(--accent)]"
+                                : "border-[rgba(184,50,50,0.18)] bg-[rgba(184,50,50,0.08)] text-[#9c2d2d]"
+                          }`}
+                        >
+                          {humanizeEnum(payment.status)}
+                        </div>
                       </div>
-                      <div className="rounded-full border border-[var(--border)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                        {payment.status}
+                      <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
+                        {payment.linkedLabel ?? "Linked listing unavailable"}
+                      </p>
+                      <p className="mt-1 text-sm leading-6 text-[var(--muted)]">{payment.reference}</p>
+                      <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+                        {payment.status === "pending" && payment.checkoutExpiresAt
+                          ? `Awaiting confirmation until ${formatDateTime(payment.checkoutExpiresAt)}`
+                          : formatDateTime(payment.createdAt)}
+                      </p>
+                      <div className="mt-4 flex flex-wrap gap-3">
+                        {payment.status === "pending" && payment.checkoutPath ? (
+                          <Link
+                            href={payment.checkoutPath}
+                            className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-[#a06b08]"
+                          >
+                            Continue checkout
+                          </Link>
+                        ) : null}
+                        {payment.linkedPath ? (
+                          <Link
+                            href={payment.linkedPath}
+                            className="rounded-full border border-[var(--primary)] px-4 py-2 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--primary)] transition hover:bg-[var(--surface-alt)]"
+                          >
+                            Open listing
+                          </Link>
+                        ) : null}
                       </div>
-                    </div>
-                    <p className="mt-3 text-sm leading-6 text-[var(--muted)]">{payment.reference}</p>
-                    <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                      {formatDateTime(payment.createdAt)}
-                    </p>
-                  </article>
-                ))
-              )}
+                    </article>
+                  ))
+                )}
 
               <div>
                 <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Recommended next</p>

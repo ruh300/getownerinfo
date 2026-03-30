@@ -3,7 +3,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentSession } from "@/lib/auth/session";
 import { canCreateListings } from "@/lib/auth/types";
 import { listingStatuses, type ListingStatus } from "@/lib/domain";
+import {
+  getOptionalTrimmedString,
+  getRouteErrorResponse,
+  readJsonObjectBody,
+  RouteInputError,
+} from "@/lib/http/route-input";
 import { updateListingLifecycleStatus } from "@/lib/listings/workflow";
+import {
+  applyRateLimitHeaders,
+  consumeRateLimit,
+  createRateLimitErrorResponse,
+  getSessionRateLimitIdentifier,
+} from "@/lib/security/rate-limit";
 
 type StatusBody = {
   status?: unknown;
@@ -22,6 +34,8 @@ export async function POST(
     params: Promise<{ listingId: string }>;
   },
 ) {
+  let rateLimit: Awaited<ReturnType<typeof consumeRateLimit>> | null = null;
+
   try {
     const session = await getCurrentSession();
 
@@ -45,36 +59,47 @@ export async function POST(
       );
     }
 
-    const body = (await request.json()) as StatusBody;
+    rateLimit = await consumeRateLimit({
+      action: "listing_status_update",
+      scope: "session",
+      identifier: getSessionRateLimitIdentifier(session),
+      max: 16,
+      windowMs: 10 * 60 * 1000,
+    });
+
+    if (!rateLimit.allowed) {
+      return createRateLimitErrorResponse(rateLimit, "Too many listing status changes were attempted. Please wait and try again.");
+    }
+
+    const body = (await readJsonObjectBody(request)) as StatusBody;
     const nextStatus = parseListingStatus(body.status);
 
     if (!nextStatus) {
-      return NextResponse.json(
-        {
-          status: "error",
-          message: "Provide a valid lifecycle status.",
-        },
-        { status: 400 },
-      );
+      throw new RouteInputError("Provide a valid lifecycle status.");
     }
 
-    const statusNote = typeof body.statusNote === "string" ? body.statusNote : undefined;
+    const statusNote = getOptionalTrimmedString(body as Record<string, unknown>, "statusNote");
     const { listingId } = await context.params;
     const result = await updateListingLifecycleStatus(session, listingId, nextStatus, statusNote);
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       status: "ok",
       listingId: result.listingId,
       previousStatus: result.previousStatus,
       listingStatus: result.status,
     });
+
+    return applyRateLimitHeaders(response, rateLimit);
   } catch (error) {
-    return NextResponse.json(
+    const routeError = getRouteErrorResponse(error, "Could not update the listing lifecycle.");
+    const response = NextResponse.json(
       {
         status: "error",
-        message: error instanceof Error ? error.message : "Could not update the listing lifecycle.",
+        message: routeError.message,
       },
-      { status: 400 },
+      { status: routeError.statusCode },
     );
+
+    return rateLimit ? applyRateLimitHeaders(response, rateLimit) : response;
   }
 }

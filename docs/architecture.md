@@ -14,7 +14,7 @@ This project is optimized for a low-cost MVP:
 - `listings`: listing creation, browsing, approval states
 - `listing-lifecycle`: owner-side status transitions after approval, plus buyer/admin visibility for those changes
 - `chat`: listing inquiries, blocked pre-unlock content, and post-unlock reply threads
-- `payments`: AfrIPay checkout and webhook handling
+- `payments`: payment intents, hosted mock or AfrIPay checkout handoff, legacy form-post callback/webhook settlement, payment-transition audit logs, and payment-state UI feedback
 - `token-unlocks`: immutable unlock records
 - `admin`: verification, fees, penalties, audit visibility
 - `fee-settings`: admin-controlled fee matrix for listing unlocks and seeker pricing
@@ -57,12 +57,18 @@ Collections to start with:
 - `src/lib/formatting/text.ts`: shared enum humanization and category labels
 - `src/lib/data/collections.ts`: typed MongoDB collection access and starter indexes
 - `src/lib/fee-settings/workflow.ts`: default fee matrix, Mongo-backed settings retrieval, and fee resolution helpers
-- `src/lib/payments/workflow.ts`: centralized payment record creation and admin payment analytics
+- `src/lib/payments/workflow.ts`: centralized payment records, pending checkout intents, legacy AfrIPay handoff payloads, idempotent settlement, unlock effects, payment-transition audit logs, and admin payment analytics
+- `src/lib/payments/afripay.ts`: server-only AfrIPay credential resolution, safe config summaries, checkout endpoint probing, and legacy contract helpers
+- `src/app/api/payments/callback/afripay/route.ts` and `src/app/api/payments/webhooks/afripay/route.ts`: shared-validation settlement entry points using the common route-input layer, legacy `client_token` fallback support, and AfrIPay status mapping
 - `src/lib/notifications/workflow.ts`: centralized in-app notification creation, unread counts, and notification center data
+- `src/lib/security/rate-limit.ts`: Mongo-backed throttling with TTL-backed buckets, rate-limit headers, and reusable request/session helpers
+- `src/lib/http/route-input.ts`: shared JSON-object parsing, trimmed-string helpers, enum coercion, and consistent input-error handling for route handlers
 - `src/lib/listings/lifecycle.ts`: shared lifecycle transition rules for listing status updates
 - `src/lib/seeker-requests/responses.ts`: owner response writes, requester response views, and seeker response counts
 - `src/lib/seeker-requests/lifecycle.ts`: requester-side fulfillment and closure rules, plus match outcome notifications
 - `src/lib/seeker-requests/messaging.ts`: matched-only seeker follow-up threads, notifications, and dashboard conversation summaries
+- `src/app/payments/checkout/[reference]/page.tsx`: hosted mock checkout screen used by unlock payment intents during development
+- `src/lib/payments/search-params.ts`: shared payment return-state parsing for detail-page banners after checkout redirects
 - `src/app/api/uploads/sign/route.ts`: signs direct Cloudinary uploads without exposing API secrets
 
 ## Delivery roadmap
@@ -89,3 +95,6 @@ MongoDB Atlas requires both of the following:
 - Keep pricing in integer Rwf values
 - Default ambiguous eligibility to Model B
 - Never expose ownership proofs or identity documents to buyer roles
+- Keep abuse controls close to write routes and prefer durable rate limits over in-memory counters on Vercel
+- Require authenticated owner-side sessions before issuing upload signatures for listing media or ownership proofs
+- Treat any payment credentials discovered in frontend-delivered templates as compromised until rotated

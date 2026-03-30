@@ -3,9 +3,12 @@ import { NextResponse } from "next/server";
 import { getCloudinary } from "@/lib/cloudinary";
 import { getServerEnv, maskSecret } from "@/lib/env";
 import { getDatabase } from "@/lib/mongodb";
+import { getAfripayConfigStatus, probeAfripayGateway } from "@/lib/payments/afripay";
 
 export async function GET() {
   const env = getServerEnv();
+  const afripay = getAfripayConfigStatus();
+  const afripayGateway = await probeAfripayGateway();
   const mongodb = {
     connected: false,
     database: env.MONGODB_DB,
@@ -44,6 +47,10 @@ export async function GET() {
       services: {
         mongodb,
         cloudinary: cloudinaryService,
+        afripay: {
+          ...afripay,
+          gateway: afripayGateway,
+        },
       },
     },
     {

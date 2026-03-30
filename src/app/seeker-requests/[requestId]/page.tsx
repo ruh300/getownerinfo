@@ -11,6 +11,7 @@ import { canCreateListings } from "@/lib/auth/types";
 import { formatRwf } from "@/lib/formatting/currency";
 import { formatDate } from "@/lib/formatting/date";
 import { getCategoryLabel, humanizeEnum } from "@/lib/formatting/text";
+import { getSingleSearchParam, parsePaymentReturnStatus } from "@/lib/payments/search-params";
 import { hasSeekerRequestUnlockForSession } from "@/lib/seeker-requests/access";
 import { getSeekerMatchConversationForSession } from "@/lib/seeker-requests/messaging";
 import { getSeekerRequestResponseContextForSession } from "@/lib/seeker-requests/responses";
@@ -18,10 +19,13 @@ import { getSeekerRequestDetailForViewer } from "@/lib/seeker-requests/workflow"
 
 export default async function SeekerRequestDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ requestId: string }>;
+  searchParams: Promise<{ payment?: string | string[]; paymentReference?: string | string[] }>;
 }) {
   const { requestId } = await params;
+  const resolvedSearchParams = await searchParams;
   const session = await getCurrentSession();
   const request = await getSeekerRequestDetailForViewer(session, requestId);
 
@@ -30,6 +34,8 @@ export default async function SeekerRequestDetailPage({
   }
 
   const unlocked = session ? await hasSeekerRequestUnlockForSession(session, requestId) : false;
+  const paymentStatus = parsePaymentReturnStatus(resolvedSearchParams.payment);
+  const paymentReference = getSingleSearchParam(resolvedSearchParams.paymentReference);
   const canUnlock = session ? canCreateListings(session.user.role) : false;
   const responseContext = session ? await getSeekerRequestResponseContextForSession(session, requestId) : null;
   const canSeePrivateDetails = Boolean(responseContext?.isRequester) || unlocked;
@@ -157,6 +163,8 @@ export default async function SeekerRequestDetailPage({
               signedIn={Boolean(session)}
               canUnlock={canUnlock}
               initiallyUnlocked={unlocked}
+              paymentStatus={paymentStatus}
+              paymentReference={paymentReference}
             />
           ) : null}
 
@@ -164,10 +172,10 @@ export default async function SeekerRequestDetailPage({
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Unlock rules</p>
             <div className="mt-4 space-y-3 text-sm leading-6 text-[var(--muted)]">
               <p>Buyer identity stays anonymized on the public board.</p>
-              <p>Owner, manager, and admin accounts can prototype-unlock seeker contact for {formatRwf(request.viewTokenFeeRwf)}.</p>
+              <p>Owner, manager, and admin accounts can unlock seeker contact for {formatRwf(request.viewTokenFeeRwf)} after checkout confirmation.</p>
               <p>Unlocked owner-side accounts can also send one direct response that stays visible in the seeker dashboard.</p>
               <p>After the requester selects a match, both sides get a private follow-up thread for next-step coordination.</p>
-              <p>All unlock actions create payment and audit records for the future real payment flow.</p>
+              <p>All unlock actions now create checkout, payment, notification, and audit records that flow through the AfrIPay handoff and callback path.</p>
             </div>
           </section>
 

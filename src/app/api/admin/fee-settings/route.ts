@@ -5,6 +5,13 @@ import { canConfigureFees } from "@/lib/auth/types";
 import { ensureUserRecord } from "@/lib/auth/user-record";
 import { getCollection } from "@/lib/data/collections";
 import { getFeeSettingsSummary, upsertFeeSettings, type FeeSettingsSummary } from "@/lib/fee-settings/workflow";
+import { getRouteErrorResponse, readJsonObjectBody } from "@/lib/http/route-input";
+import {
+  applyRateLimitHeaders,
+  consumeRateLimit,
+  createRateLimitErrorResponse,
+  getSessionRateLimitIdentifier,
+} from "@/lib/security/rate-limit";
 
 export async function GET() {
   try {
@@ -39,6 +46,8 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  let rateLimit: Awaited<ReturnType<typeof consumeRateLimit>> | null = null;
+
   try {
     const session = await getCurrentSession();
 
@@ -62,8 +71,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    rateLimit = await consumeRateLimit({
+      action: "admin_fee_settings_update",
+      scope: "session",
+      identifier: getSessionRateLimitIdentifier(session),
+      max: 12,
+      windowMs: 10 * 60 * 1000,
+    });
+
+    if (!rateLimit.allowed) {
+      return createRateLimitErrorResponse(rateLimit, "Fee settings were updated too many times in a short period. Please wait and try again.");
+    }
+
     const actor = await ensureUserRecord(session);
-    const payload = (await request.json()) as FeeSettingsSummary;
+    const payload = (await readJsonObjectBody(request)) as FeeSettingsSummary;
     const settings = await upsertFeeSettings(payload);
     const auditLogs = await getCollection("auditLogs");
     const now = new Date();
@@ -81,17 +102,22 @@ export async function POST(request: NextRequest) {
       updatedAt: now,
     });
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       status: "ok",
       settings,
     });
+
+    return applyRateLimitHeaders(response, rateLimit);
   } catch (error) {
-    return NextResponse.json(
+    const routeError = getRouteErrorResponse(error, "Could not save fee settings.");
+    const response = NextResponse.json(
       {
         status: "error",
-        message: error instanceof Error ? error.message : "Could not save fee settings.",
+        message: routeError.message,
       },
-      { status: 400 },
+      { status: routeError.statusCode },
     );
+
+    return rateLimit ? applyRateLimitHeaders(response, rateLimit) : response;
   }
 }

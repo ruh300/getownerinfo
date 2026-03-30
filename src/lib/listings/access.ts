@@ -5,7 +5,7 @@ import { ensureUserRecord } from "@/lib/auth/user-record";
 import { getCollection } from "@/lib/data/collections";
 import { getFeeSettingsSummary, resolveListingTokenFeeRwf } from "@/lib/fee-settings/workflow";
 import { createNotification } from "@/lib/notifications/workflow";
-import { createPaymentRecord } from "@/lib/payments/workflow";
+import { createPaymentIntent } from "@/lib/payments/workflow";
 
 function parseObjectId(value: string) {
   if (!ObjectId.isValid(value)) {
@@ -61,57 +61,68 @@ export async function unlockListingForSession(session: AuthSession, listingId: s
   const unlockAmountRwf = listing.tokenFeeEnabled
     ? listing.tokenFeeRwf ?? resolveListingTokenFeeRwf(feeSettings!, listing.category, listing.model)
     : 0;
-  await tokenUnlocks.insertOne({
-    userId: user._id,
-    listingId: listingObjectId,
-    unlockedAt: now,
-    fieldsUnlocked: ["ownerName", "ownerPhone", "address", "keysManager"],
-    createdAt: now,
-    updatedAt: now,
-  });
 
-  if (unlockAmountRwf > 0) {
-    await createPaymentRecord({
+  if (unlockAmountRwf <= 0) {
+    await tokenUnlocks.insertOne({
       userId: user._id,
       listingId: listingObjectId,
-      amountRwf: unlockAmountRwf,
-      purpose: "token_fee",
-      referencePrefix: "TOKEN",
-      metadata: {
-        flow: "prototype_listing_unlock",
-        listingTitle: listing.title,
-      },
+      unlockedAt: now,
+      fieldsUnlocked: ["ownerName", "ownerPhone", "address", "keysManager"],
+      createdAt: now,
+      updatedAt: now,
     });
+
+    await auditLogs.insertOne({
+      actorUserId: user._id,
+      entityType: "token_unlock",
+      entityId: listingId,
+      action: "listing_unlock_no_fee",
+      metadata: {
+        listingTitle: listing.title,
+        amountRwf: 0,
+      },
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await createNotification({
+      userId: listing.ownerUserId,
+      kind: "listing_unlocked",
+      severity: "success",
+      title: "A buyer unlocked your listing",
+      body: `${user.fullName} unlocked contact access for ${listing.title}.`,
+      entityType: "token_unlock",
+      entityId: listingId,
+      link: "/dashboard#notifications",
+    });
+
+    return {
+      listingId,
+      unlocked: true,
+      reused: false,
+    };
   }
 
-  await auditLogs.insertOne({
-    actorUserId: user._id,
-    entityType: "token_unlock",
-    entityId: listingId,
-    action: "prototype_listing_unlock",
+  const intent = await createPaymentIntent({
+    userId: user._id,
+    listingId: listingObjectId,
+    amountRwf: unlockAmountRwf,
+    purpose: "token_fee",
+    referencePrefix: "TOKEN",
+    returnPath: `/listings/${listingId}`,
     metadata: {
+      flow: "listing_unlock_checkout",
       listingTitle: listing.title,
+      actorName: user.fullName,
       ownerPhone: listing.ownerContact.phone,
-      amountRwf: unlockAmountRwf,
     },
-    createdAt: now,
-    updatedAt: now,
-  });
-
-  await createNotification({
-    userId: listing.ownerUserId,
-    kind: "listing_unlocked",
-    severity: "success",
-    title: "A buyer unlocked your listing",
-    body: `${user.fullName} unlocked contact access for ${listing.title}.`,
-    entityType: "token_unlock",
-    entityId: listingId,
-    link: "/dashboard#notifications",
   });
 
   return {
     listingId,
-    unlocked: true,
-    reused: false,
+    unlocked: false,
+    reused: intent.reused,
+    paymentReference: intent.payment.reference,
+    checkoutUrl: intent.checkoutUrl,
   };
 }

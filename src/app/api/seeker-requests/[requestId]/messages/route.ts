@@ -2,9 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { getCurrentSession } from "@/lib/auth/session";
 import {
+  getOptionalTrimmedString,
+  getRouteErrorResponse,
+  readJsonObjectBody,
+} from "@/lib/http/route-input";
+import {
   getSeekerMatchConversationForSession,
   sendSeekerMatchMessageForSession,
 } from "@/lib/seeker-requests/messaging";
+import {
+  applyRateLimitHeaders,
+  consumeRateLimit,
+  createRateLimitErrorResponse,
+  getSessionRateLimitIdentifier,
+} from "@/lib/security/rate-limit";
 
 export async function GET(
   _request: NextRequest,
@@ -49,6 +60,8 @@ export async function POST(
     params: Promise<{ requestId: string }>;
   },
 ) {
+  let rateLimit: Awaited<ReturnType<typeof consumeRateLimit>> | null = null;
+
   try {
     const session = await getCurrentSession();
 
@@ -62,23 +75,38 @@ export async function POST(
       );
     }
 
-    const payload = (await request.json()) as {
-      body?: string;
-    };
-    const { requestId } = await context.params;
-    const result = await sendSeekerMatchMessageForSession(session, requestId, payload.body ?? "");
+    rateLimit = await consumeRateLimit({
+      action: "seeker_match_message_create",
+      scope: "session",
+      identifier: getSessionRateLimitIdentifier(session),
+      max: 18,
+      windowMs: 10 * 60 * 1000,
+    });
 
-    return NextResponse.json({
+    if (!rateLimit.allowed) {
+      return createRateLimitErrorResponse(rateLimit, "You are sending matched seeker messages too quickly. Please wait a moment and try again.");
+    }
+
+    const payload = await readJsonObjectBody(request);
+    const { requestId } = await context.params;
+    const result = await sendSeekerMatchMessageForSession(session, requestId, getOptionalTrimmedString(payload, "body") ?? "");
+
+    const response = NextResponse.json({
       status: "ok",
       entry: result.message,
     });
+
+    return applyRateLimitHeaders(response, rateLimit);
   } catch (error) {
-    return NextResponse.json(
+    const routeError = getRouteErrorResponse(error, "Could not send the matched seeker message.");
+    const response = NextResponse.json(
       {
         status: "error",
-        message: error instanceof Error ? error.message : "Could not send the matched seeker message.",
+        message: routeError.message,
       },
-      { status: 400 },
+      { status: routeError.statusCode },
     );
+
+    return rateLimit ? applyRateLimitHeaders(response, rateLimit) : response;
   }
 }

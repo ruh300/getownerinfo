@@ -6,7 +6,7 @@ import { canCreateListings } from "@/lib/auth/types";
 import { getCollection } from "@/lib/data/collections";
 import { getFeeSettingsSummary, resolveSeekerViewTokenFeeRwf } from "@/lib/fee-settings/workflow";
 import { createNotification } from "@/lib/notifications/workflow";
-import { createPaymentRecord } from "@/lib/payments/workflow";
+import { createPaymentIntent } from "@/lib/payments/workflow";
 
 function parseObjectId(value: string) {
   if (!ObjectId.isValid(value)) {
@@ -68,56 +68,70 @@ export async function unlockSeekerRequestForSession(session: AuthSession, seeker
 
   const feeSettings = await getFeeSettingsSummary();
   const unlockAmountRwf = seekerRequest.viewTokenFeeRwf ?? resolveSeekerViewTokenFeeRwf(feeSettings);
-  await seekerRequestUnlocks.insertOne({
-    userId: user._id,
-    requesterUserId: seekerRequest.requesterUserId,
-    seekerRequestId: requestObjectId,
-    unlockedAt: now,
-    fieldsUnlocked: ["seekerName", "seekerPhone", "preferredContactTime", "fullDetails"],
-    createdAt: now,
-    updatedAt: now,
-  });
 
-  await createPaymentRecord({
+  if (unlockAmountRwf <= 0) {
+    await seekerRequestUnlocks.insertOne({
+      userId: user._id,
+      requesterUserId: seekerRequest.requesterUserId,
+      seekerRequestId: requestObjectId,
+      unlockedAt: now,
+      fieldsUnlocked: ["seekerName", "seekerPhone", "preferredContactTime", "fullDetails"],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await auditLogs.insertOne({
+      actorUserId: user._id,
+      entityType: "seeker_request",
+      entityId: seekerRequestId,
+      action: "seeker_request_unlock_no_fee",
+      metadata: {
+        requesterUserId: seekerRequest.requesterUserId.toString(),
+        title: seekerRequest.title,
+        amountRwf: 0,
+      },
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await createNotification({
+      userId: seekerRequest.requesterUserId,
+      kind: "seeker_request_unlocked",
+      severity: "success",
+      title: "An owner unlocked your seeker request",
+      body: `${user.fullName} unlocked the contact details for ${seekerRequest.title}.`,
+      entityType: "seeker_request",
+      entityId: seekerRequestId,
+      link: "/dashboard#notifications",
+    });
+
+    return {
+      seekerRequestId,
+      unlocked: true,
+      reused: false,
+    };
+  }
+
+  const intent = await createPaymentIntent({
     userId: user._id,
     seekerRequestId: requestObjectId,
     amountRwf: unlockAmountRwf,
     purpose: "seeker_view_token",
     referencePrefix: "SVT",
+    returnPath: `/seeker-requests/${seekerRequestId}`,
     metadata: {
-      flow: "prototype_seeker_contact_unlock",
+      flow: "seeker_unlock_checkout",
       title: seekerRequest.title,
-    },
-  });
-
-  await auditLogs.insertOne({
-    actorUserId: user._id,
-    entityType: "seeker_request",
-    entityId: seekerRequestId,
-    action: "prototype_seeker_contact_unlock",
-    metadata: {
+      actorName: user.fullName,
       requesterUserId: seekerRequest.requesterUserId.toString(),
-      title: seekerRequest.title,
-      amountRwf: unlockAmountRwf,
     },
-    createdAt: now,
-    updatedAt: now,
-  });
-
-  await createNotification({
-    userId: seekerRequest.requesterUserId,
-    kind: "seeker_request_unlocked",
-    severity: "success",
-    title: "An owner unlocked your seeker request",
-    body: `${user.fullName} unlocked the contact details for ${seekerRequest.title}.`,
-    entityType: "seeker_request",
-    entityId: seekerRequestId,
-    link: "/dashboard#notifications",
   });
 
   return {
     seekerRequestId,
-    unlocked: true,
-    reused: false,
+    unlocked: false,
+    reused: intent.reused,
+    paymentReference: intent.payment.reference,
+    checkoutUrl: intent.checkoutUrl,
   };
 }

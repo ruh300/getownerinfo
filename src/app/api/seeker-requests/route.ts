@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getCurrentSession } from "@/lib/auth/session";
+import { getRouteErrorResponse, readJsonObjectBody } from "@/lib/http/route-input";
 import { createSeekerRequestForSession } from "@/lib/seeker-requests/workflow";
+import {
+  applyRateLimitHeaders,
+  consumeRateLimit,
+  createRateLimitErrorResponse,
+  getSessionRateLimitIdentifier,
+} from "@/lib/security/rate-limit";
 
 export async function POST(request: NextRequest) {
+  let rateLimit: Awaited<ReturnType<typeof consumeRateLimit>> | null = null;
+
   try {
     const session = await getCurrentSession();
 
@@ -27,11 +36,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = (await request.json()) as Record<string, unknown>;
+    rateLimit = await consumeRateLimit({
+      action: "seeker_request_create",
+      scope: "session",
+      identifier: getSessionRateLimitIdentifier(session),
+      max: 4,
+      windowMs: 60 * 60 * 1000,
+    });
+
+    if (!rateLimit.allowed) {
+      return createRateLimitErrorResponse(rateLimit, "Too many seeker requests were posted from this account. Try again later.");
+    }
+
+    const body = await readJsonObjectBody(request);
     const result = await createSeekerRequestForSession(session, body);
 
     if (!result.ok) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         {
           status: "error",
           message: "Seeker request validation failed.",
@@ -39,9 +60,11 @@ export async function POST(request: NextRequest) {
         },
         { status: 400 },
       );
+
+      return applyRateLimitHeaders(response, rateLimit);
     }
 
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         status: "ok",
         requestId: result.request._id.toString(),
@@ -49,13 +72,18 @@ export async function POST(request: NextRequest) {
       },
       { status: 201 },
     );
+
+    return applyRateLimitHeaders(response, rateLimit);
   } catch (error) {
-    return NextResponse.json(
+    const routeError = getRouteErrorResponse(error, "Could not create the seeker request.", 500);
+    const response = NextResponse.json(
       {
         status: "error",
-        message: error instanceof Error ? error.message : "Could not create the seeker request.",
+        message: routeError.message,
       },
-      { status: 500 },
+      { status: routeError.statusCode },
     );
+
+    return rateLimit ? applyRateLimitHeaders(response, rateLimit) : response;
   }
 }

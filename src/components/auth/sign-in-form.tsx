@@ -129,6 +129,10 @@ export function SignInForm({ nextPath }: { nextPath: string }) {
               ? "This role will open the owner workspace and listing draft flow after sign-in."
               : "This role will open the buyer dashboard after sign-in."}
         </p>
+        <p className="mt-2">
+          Repeated sign-in, unlock, and messaging attempts are temporarily throttled to protect the marketplace while
+          we harden the production auth and payment stack.
+        </p>
       </div>
 
       {error ? <div className="rounded-2xl border border-[rgba(184,50,50,0.2)] bg-[rgba(184,50,50,0.08)] px-4 py-3 text-sm text-[#9c2d2d]">{error}</div> : null}

@@ -2,6 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { getCurrentSession } from "@/lib/auth/session";
 import { getListingMessagesForSession, sendListingMessageForSession } from "@/lib/chat/workflow";
+import {
+  getOptionalTrimmedString,
+  getRouteErrorResponse,
+  readJsonObjectBody,
+} from "@/lib/http/route-input";
+import {
+  applyRateLimitHeaders,
+  consumeRateLimit,
+  createRateLimitErrorResponse,
+  getSessionRateLimitIdentifier,
+} from "@/lib/security/rate-limit";
 
 export async function GET(
   _request: NextRequest,
@@ -46,6 +57,8 @@ export async function POST(
     params: Promise<{ listingId: string }>;
   },
 ) {
+  let rateLimit: Awaited<ReturnType<typeof consumeRateLimit>> | null = null;
+
   try {
     const session = await getCurrentSession();
 
@@ -59,28 +72,42 @@ export async function POST(
       );
     }
 
-    const payload = (await request.json()) as {
-      body?: string;
-      buyerUserId?: string;
-    };
-    const { listingId } = await context.params;
-    const result = await sendListingMessageForSession(session, listingId, payload.body ?? "", {
-      buyerUserId: payload.buyerUserId,
+    rateLimit = await consumeRateLimit({
+      action: "listing_message_create",
+      scope: "session",
+      identifier: getSessionRateLimitIdentifier(session),
+      max: 18,
+      windowMs: 10 * 60 * 1000,
     });
 
-    return NextResponse.json({
+    if (!rateLimit.allowed) {
+      return createRateLimitErrorResponse(rateLimit, "You are sending listing messages too quickly. Please wait a moment and try again.");
+    }
+
+    const payload = await readJsonObjectBody(request);
+    const { listingId } = await context.params;
+    const result = await sendListingMessageForSession(session, listingId, getOptionalTrimmedString(payload, "body") ?? "", {
+      buyerUserId: getOptionalTrimmedString(payload, "buyerUserId"),
+    });
+
+    const response = NextResponse.json({
       status: "ok",
       delivered: result.delivered,
       entry: result.message,
       error: result.error,
     });
+
+    return applyRateLimitHeaders(response, rateLimit);
   } catch (error) {
-    return NextResponse.json(
+    const routeError = getRouteErrorResponse(error, "Could not send the listing inquiry.");
+    const response = NextResponse.json(
       {
         status: "error",
-        message: error instanceof Error ? error.message : "Could not send the listing inquiry.",
+        message: routeError.message,
       },
-      { status: 400 },
+      { status: routeError.statusCode },
     );
+
+    return rateLimit ? applyRateLimitHeaders(response, rateLimit) : response;
   }
 }

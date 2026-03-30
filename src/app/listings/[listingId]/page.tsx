@@ -9,13 +9,17 @@ import { formatDateTime } from "@/lib/formatting/date";
 import { getCategoryLabel, humanizeEnum } from "@/lib/formatting/text";
 import { hasListingUnlockForSession } from "@/lib/listings/access";
 import { getPublicListingDetail } from "@/lib/listings/public";
+import { getSingleSearchParam, parsePaymentReturnStatus } from "@/lib/payments/search-params";
 
 export default async function ListingDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ listingId: string }>;
+  searchParams: Promise<{ payment?: string | string[]; paymentReference?: string | string[] }>;
 }) {
   const { listingId } = await params;
+  const resolvedSearchParams = await searchParams;
   const listing = await getPublicListingDetail(listingId);
   const session = await getCurrentSession();
 
@@ -24,6 +28,8 @@ export default async function ListingDetailPage({
   }
 
   const unlocked = session ? await hasListingUnlockForSession(session, listingId) : false;
+  const paymentStatus = parsePaymentReturnStatus(resolvedSearchParams.payment);
+  const paymentReference = getSingleSearchParam(resolvedSearchParams.paymentReference);
   const exactAddress =
     [listing.upiNumber, listing.streetAddress].filter(Boolean).join(" / ") || "Exact address available after unlock";
   const orderedMedia = [...listing.media].sort((left, right) => Number(right.isCover) - Number(left.isCover));
@@ -120,6 +126,8 @@ export default async function ListingDetailPage({
             exactAddress={exactAddress}
             signedIn={Boolean(session)}
             initiallyUnlocked={unlocked}
+            paymentStatus={paymentStatus}
+            paymentReference={paymentReference}
           />
           <AvailabilityChat
             listingId={listing.id}
@@ -135,7 +143,7 @@ export default async function ListingDetailPage({
                 Approximate area: {listing.approximateAreaLabel}
                 {listing.district ? `, ${listing.district}` : ""}
               </p>
-              <p>Exact street address remains hidden until the token payment succeeds.</p>
+              <p>Exact street address remains hidden until the unlock payment settles.</p>
               <p>Owner type: {humanizeEnum(listing.ownerType)}</p>
               <p>Last updated {formatDateTime(listing.updatedAt)}</p>
             </div>

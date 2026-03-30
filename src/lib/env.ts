@@ -9,6 +9,13 @@ type RequiredServerEnv = {
 
 type ServerEnv = RequiredServerEnv & {
   NEXT_PUBLIC_APP_URL: string | null;
+  PAYMENT_PROVIDER_MODE: "mock" | "afripay";
+  AFRIPAY_GATEWAY_URL: string | null;
+  AFRIPAY_APP_ID: string | null;
+  AFRIPAY_APP_SECRET: string | null;
+  AFRIPAY_PUBLIC_KEY: string | null;
+  AFRIPAY_SECRET_KEY: string | null;
+  AFRIPAY_WEBHOOK_SECRET: string | null;
 };
 
 let cachedEnv: ServerEnv | null = null;
@@ -28,8 +35,17 @@ export function getServerEnv(): ServerEnv {
     return cachedEnv;
   }
 
+  const paymentProviderMode = process.env.PAYMENT_PROVIDER_MODE === "afripay" ? "afripay" : "mock";
+
   cachedEnv = {
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? null,
+    PAYMENT_PROVIDER_MODE: paymentProviderMode,
+    AFRIPAY_GATEWAY_URL: process.env.AFRIPAY_GATEWAY_URL ?? null,
+    AFRIPAY_APP_ID: process.env.AFRIPAY_APP_ID ?? null,
+    AFRIPAY_APP_SECRET: process.env.AFRIPAY_APP_SECRET ?? null,
+    AFRIPAY_PUBLIC_KEY: process.env.AFRIPAY_PUBLIC_KEY ?? null,
+    AFRIPAY_SECRET_KEY: process.env.AFRIPAY_SECRET_KEY ?? null,
+    AFRIPAY_WEBHOOK_SECRET: process.env.AFRIPAY_WEBHOOK_SECRET ?? null,
     AUTH_SESSION_SECRET: getRequiredEnv("AUTH_SESSION_SECRET"),
     MONGODB_URI: getRequiredEnv("MONGODB_URI"),
     MONGODB_DB: getRequiredEnv("MONGODB_DB"),

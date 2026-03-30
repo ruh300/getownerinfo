@@ -36,6 +36,10 @@ export type BuyerPaymentSummary = {
   amountRwf: number;
   status: PaymentDocument["status"];
   listingId: string | null;
+  linkedLabel: string | null;
+  linkedPath: string | null;
+  checkoutPath: string | null;
+  checkoutExpiresAt: string | null;
   createdAt: string;
 };
 
@@ -45,10 +49,12 @@ export type BuyerWorkspaceData = {
     totalSpentRwf: number;
     activeUnlockCount: number;
     paymentCount: number;
+    pendingPaymentCount: number;
     seekerRequestCount: number;
     activeSeekerRequestCount: number;
   };
   unlockedListings: BuyerUnlockSummary[];
+  pendingPayments: BuyerPaymentSummary[];
   recentPayments: BuyerPaymentSummary[];
   recommendedListings: PublicListingSummary[];
   seekerRequests: BuyerSeekerRequestSummary[];
@@ -56,7 +62,12 @@ export type BuyerWorkspaceData = {
   matchedSeekerConversations: SeekerMatchConversationSummary[];
 };
 
-function serializePayment(payment: WithId<PaymentDocument>): BuyerPaymentSummary {
+function serializePayment(
+  payment: WithId<PaymentDocument>,
+  listingMap: Map<string, WithId<ListingDocument>>,
+): BuyerPaymentSummary {
+  const linkedListing = payment.listingId ? listingMap.get(payment.listingId.toString()) : null;
+
   return {
     id: payment._id.toString(),
     reference: payment.reference,
@@ -64,6 +75,10 @@ function serializePayment(payment: WithId<PaymentDocument>): BuyerPaymentSummary
     amountRwf: payment.amountRwf,
     status: payment.status,
     listingId: payment.listingId?.toString() ?? null,
+    linkedLabel: linkedListing?.title ?? (payment.listingId ? `Listing ${payment.listingId.toString()}` : null),
+    linkedPath: payment.listingId ? `/listings/${payment.listingId.toString()}` : null,
+    checkoutPath: payment.checkoutUrl ?? null,
+    checkoutExpiresAt: payment.checkoutExpiresAt?.toISOString() ?? null,
     createdAt: payment.createdAt.toISOString(),
   };
 }
@@ -75,6 +90,13 @@ export async function getBuyerWorkspaceData(session: AuthSession): Promise<Buyer
   const payments = await getCollection("payments");
   const seekerRequests = await getCollection("seekerRequests");
   const feeSettings = await getFeeSettingsSummary();
+  const now = new Date();
+  const activePendingPaymentFilter = {
+    userId: user._id,
+    purpose: "token_fee" as const,
+    status: "pending" as const,
+    $or: [{ checkoutExpiresAt: { $gt: now } }, { checkoutExpiresAt: { $exists: false } }],
+  };
   const unlockRecords = await tokenUnlocks
     .find({
       userId: user._id,
@@ -83,14 +105,6 @@ export async function getBuyerWorkspaceData(session: AuthSession): Promise<Buyer
     .limit(12)
     .toArray();
   const listingIds = unlockRecords.map((unlock) => unlock.listingId);
-  const unlockedListings = listingIds.length
-    ? await listings
-        .find({
-          _id: { $in: listingIds },
-        })
-        .toArray()
-    : [];
-  const listingMap = new Map(unlockedListings.map((listing) => [listing._id.toString(), listing]));
   const recentPayments = await payments
     .find({
       userId: user._id,
@@ -99,11 +113,29 @@ export async function getBuyerWorkspaceData(session: AuthSession): Promise<Buyer
     .sort({ createdAt: -1 })
     .limit(10)
     .toArray();
+  const [pendingPayments, pendingPaymentCount] = await Promise.all([
+    payments.find(activePendingPaymentFilter).sort({ createdAt: -1 }).limit(6).toArray(),
+    payments.countDocuments(activePendingPaymentFilter),
+  ]);
+  const relatedListingIds = [
+    ...listingIds,
+    ...recentPayments.map((payment) => payment.listingId).filter((listingId): listingId is NonNullable<PaymentDocument["listingId"]> => Boolean(listingId)),
+    ...pendingPayments.map((payment) => payment.listingId).filter((listingId): listingId is NonNullable<PaymentDocument["listingId"]> => Boolean(listingId)),
+  ];
+  const uniqueListingIds = [...new Map(relatedListingIds.map((listingId) => [listingId.toString(), listingId])).values()];
   const paymentMap = new Map(
     recentPayments
       .filter((payment) => payment.listingId)
       .map((payment) => [payment.listingId!.toString(), payment]),
   );
+  const relatedListings = uniqueListingIds.length
+    ? await listings
+        .find({
+          _id: { $in: uniqueListingIds },
+        })
+        .toArray()
+    : [];
+  const listingMap = new Map(relatedListings.map((listing) => [listing._id.toString(), listing]));
   const aggregate = await payments
     .aggregate<{ _id: null; totalSpentRwf: number; paymentCount: number }>([
       {
@@ -128,17 +160,17 @@ export async function getBuyerWorkspaceData(session: AuthSession): Promise<Buyer
   };
   const [buyerSeekerRequests, recentSeekerResponses, matchedSeekerConversations, seekerRequestCount, activeSeekerRequestCount] =
     await Promise.all([
-    getBuyerSeekerRequestsForUser(user._id),
-    getBuyerSeekerResponsesForUser(user._id),
-    getSeekerMatchConversationFeedForUser(user._id),
-    seekerRequests.countDocuments({
-      requesterUserId: user._id,
-    }),
-    seekerRequests.countDocuments({
-      requesterUserId: user._id,
-      status: "active",
-      expiresAt: { $gt: new Date() },
-    }),
+      getBuyerSeekerRequestsForUser(user._id),
+      getBuyerSeekerResponsesForUser(user._id),
+      getSeekerMatchConversationFeedForUser(user._id),
+      seekerRequests.countDocuments({
+        requesterUserId: user._id,
+      }),
+      seekerRequests.countDocuments({
+        requesterUserId: user._id,
+        status: "active",
+        expiresAt: { $gt: new Date() },
+      }),
     ]);
 
   const unlockedListingSummaries = unlockRecords
@@ -179,11 +211,13 @@ export async function getBuyerWorkspaceData(session: AuthSession): Promise<Buyer
       totalSpentRwf: totals.totalSpentRwf,
       activeUnlockCount: unlockedListingSummaries.filter((listing) => listing.stillActive).length,
       paymentCount: totals.paymentCount,
+      pendingPaymentCount,
       seekerRequestCount,
       activeSeekerRequestCount,
     },
     unlockedListings: unlockedListingSummaries,
-    recentPayments: recentPayments.map(serializePayment),
+    pendingPayments: pendingPayments.map((payment) => serializePayment(payment, listingMap)),
+    recentPayments: recentPayments.map((payment) => serializePayment(payment, listingMap)),
     recommendedListings,
     seekerRequests: buyerSeekerRequests,
     recentSeekerResponses,

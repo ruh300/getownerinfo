@@ -17,7 +17,11 @@ The app already has:
 - requester-side seeker fulfillment and closure with matched owner outcome tracking
 - matched-only seeker follow-up messaging between the requester and selected owner response
 - admin-configurable listing token fees and seeker pricing flowing through shared settings
-- payment records flowing through a shared payment workflow
+- payment records, pending unlock checkout intents, and provider-ready settlement routes flowing through a shared payment workflow
+- payment transition audit logs, shared AfrIPay callback/webhook validation, an admin payment operations feed, and the legacy AfrIPay form-post handoff contract
+- buyer-side pending checkout visibility and return-state messaging on unlock detail pages
+- automatic Mongo index bootstrap and Mongo-backed throttling across sign-in and the main write surface
+- shared request-body parsing and route-level validation helpers across the core write routes
 - notification infrastructure across review, unlock, inquiry, and seeker flows
 
 The largest remaining gaps are not page count. They are production reliability, payment correctness, operational tooling, and workflow completion.
@@ -37,20 +41,20 @@ The largest remaining gaps are not page count. They are production reliability, 
    Status: in progress
    Scope: listing lifecycle updates, seeker response workflow, seeker closure outcomes, post-unlock messaging, and matched follow-up threads.
 5. Phase 5: Launch hardening
-   Status: next
+   Status: in progress
    Scope: AfrIPay callbacks/webhooks, auth hardening, rate limiting, exports, penalties, and production safety.
 
 ## Priority 0: Launch Blockers
 
 These are the items that must be completed before treating the app as a real marketplace.
 
-1. Replace prototype payments with real AfrIPay orchestration.
+1. Validate and harden the legacy AfrIPay form-post contract against real gateway return payloads, or replace it with a documented server-to-server contract if AfrIPay provides one.
 2. Add durable payment states, callbacks, idempotency keys, and reconciliation logic.
 3. Harden auth beyond the current signed-cookie prototype.
 4. Separate development, preview, and production environment behavior.
-5. Rotate exposed secrets and validate Vercel environment configuration.
-6. Add rate limiting and abuse controls around unlock, sign-in, and messaging endpoints.
-7. Add server-side validation consistency for every write route.
+5. Rotate exposed AfrIPay secrets and validate Vercel environment configuration.
+6. Extend the new rate limiting and abuse controls from the current protected write routes to any future export, penalty, or webhook-management endpoints.
+7. Extend the new server-side validation consistency pattern to the few remaining write routes and webhook payload verification.
 8. Add immutable audit visibility for unlocks, seeker unlocks, and admin overrides.
 
 ## Priority 1: Workflow Completion
@@ -96,7 +100,7 @@ These items reduce future bugs and speed up safe iteration.
 
 ## Recommended Execution Order
 
-1. AfrIPay integration and payment state model
+1. Live AfrIPay adapter on top of the new payment intent/state model
 2. Listing lifecycle and commission states
 3. Penalties and admin fee controls
 4. Analytics, exports, and support tooling
@@ -115,4 +119,7 @@ This tranche focuses on workflow completion across listing and seeker demand flo
 - requester-side closure and fulfillment actions with matched owner tracking
 - matched-only post-fulfillment seeker follow-up threads and dashboard visibility
 - admin-managed fee settings for listing token fees and seeker pricing
+- pending checkout intents and mock hosted payment confirmation for listing and seeker unlocks
+- dashboard and detail-page UI polish for continuing checkout and understanding payment return states
+- payment transition visibility for admins, safer AfrIPay callback/webhook parsing, and legacy form-post gateway handoff
 - updated phase tracking for workflow completion

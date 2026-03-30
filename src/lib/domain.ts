@@ -63,6 +63,9 @@ export type PaymentPurpose = (typeof paymentPurposes)[number];
 export const paymentStatuses = ["pending", "paid", "failed", "cancelled"] as const;
 export type PaymentStatus = (typeof paymentStatuses)[number];
 
+export const rateLimitScopes = ["ip", "session"] as const;
+export type RateLimitScope = (typeof rateLimitScopes)[number];
+
 export const notificationKinds = [
   "listing_submitted_for_review",
   "listing_approved",
@@ -219,10 +222,30 @@ export type PaymentDocument = BaseDocument & {
   reference: string;
   providerReference?: string;
   providerTransactionId?: string;
+  checkoutUrl?: string;
+  checkoutExpiresAt?: Date;
+  returnPath?: string;
+  idempotencyKey?: string;
+  lastProviderStatus?: string;
+  lastWebhookAt?: Date;
+  paidActionAppliedAt?: Date;
+  failureReason?: string;
   settledAt?: Date;
   failedAt?: Date;
   cancelledAt?: Date;
   metadata?: Record<string, unknown>;
+};
+
+export type RateLimitBucketDocument = BaseDocument & {
+  key: string;
+  action: string;
+  scope: RateLimitScope;
+  identifierHash: string;
+  count: number;
+  windowMs: number;
+  bucketStartedAt: Date;
+  expiresAt: Date;
+  lastSeenAt: Date;
 };
 
 export type SeekerRequestDocument = BaseDocument & {

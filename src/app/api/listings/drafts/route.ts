@@ -2,9 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { getCurrentSession } from "@/lib/auth/session";
 import { listingEditorRoles } from "@/lib/auth/types";
+import { getRouteErrorResponse, readJsonObjectBody } from "@/lib/http/route-input";
 import { saveDraftForSession } from "@/lib/listings/workflow";
+import {
+  applyRateLimitHeaders,
+  consumeRateLimit,
+  createRateLimitErrorResponse,
+  getSessionRateLimitIdentifier,
+} from "@/lib/security/rate-limit";
 
 export async function POST(request: NextRequest) {
+  let rateLimit: Awaited<ReturnType<typeof consumeRateLimit>> | null = null;
+
   try {
     const session = await getCurrentSession();
 
@@ -28,11 +37,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = (await request.json()) as Record<string, unknown>;
+    rateLimit = await consumeRateLimit({
+      action: "listing_draft_save",
+      scope: "session",
+      identifier: getSessionRateLimitIdentifier(session),
+      max: 40,
+      windowMs: 10 * 60 * 1000,
+    });
+
+    if (!rateLimit.allowed) {
+      return createRateLimitErrorResponse(rateLimit, "Too many draft saves were attempted. Please pause for a moment before saving again.");
+    }
+
+    const body = await readJsonObjectBody(request);
     const result = await saveDraftForSession(session, body);
 
     if (!result.ok) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         {
           status: "error",
           message: "Draft validation failed.",
@@ -40,9 +61,11 @@ export async function POST(request: NextRequest) {
         },
         { status: 400 },
       );
+
+      return applyRateLimitHeaders(response, rateLimit);
     }
 
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         status: "ok",
         draftId: result.draft._id.toString(),
@@ -51,15 +74,18 @@ export async function POST(request: NextRequest) {
       },
       { status: 201 },
     );
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Draft creation failed.";
 
-    return NextResponse.json(
+    return applyRateLimitHeaders(response, rateLimit);
+  } catch (error) {
+    const routeError = getRouteErrorResponse(error, "Draft creation failed.", 500);
+    const response = NextResponse.json(
       {
         status: "error",
-        message,
+        message: routeError.message,
       },
-      { status: 500 },
+      { status: routeError.statusCode },
     );
+
+    return rateLimit ? applyRateLimitHeaders(response, rateLimit) : response;
   }
 }

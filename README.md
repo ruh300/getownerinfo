@@ -40,33 +40,39 @@ The initial build favors:
 
 ## Immediate Next Steps
 
-1. Replace prototype payment records with real AfrIPay checkout, callback, and webhook orchestration
-2. Add penalties, commission tracking, and stronger payment operations tooling
-3. Harden auth, rate limiting, and deployment configuration for production
-4. Add focused integration tests and launch polish from `docs/engineering-roadmap.md`
+1. Validate the legacy AfrIPay form-post contract against real gateway return payloads and reduce remaining manual-review ambiguity
+2. Move seeker-post creation onto the same pending payment-intent flow used by unlocks
+3. Add penalties, commission tracking, and stronger payment operations tooling
+4. Harden auth, rate limiting, and deployment configuration for production
+5. Rotate any AfrIPay credentials that were ever exposed in frontend templates, then keep them server-side only
+6. Add focused integration tests and launch polish from `docs/engineering-roadmap.md`
 
 ## Current Integration Status
 
 - MongoDB Atlas credentials are expected in `.env.local`
 - Cloudinary credentials are expected in `.env.local`
 - `AUTH_SESSION_SECRET` enables the protected workspace session cookie in production
+- `PAYMENT_PROVIDER_MODE=afripay` enables the legacy AfrIPay form-post checkout contract, while `mock` keeps the local simulator available for fallback development
+- `AFRIPAY_GATEWAY_URL` points at the legacy AfrIPay checkout endpoint used for the hosted handoff and server-side health probe
+- AfrIPay app credentials are now modeled server-side with `AFRIPAY_APP_ID` and `AFRIPAY_APP_SECRET`, while the older key-pair env vars remain supported for legacy integration attempts
+- Mongo collections now bootstrap their core indexes automatically on first use, including TTL cleanup for rate-limit buckets
 - The repository includes reusable server helpers for both services
 - `GET /api/status` performs a lightweight connectivity check without exposing secrets
 - `GET /api/listings/eligibility` exposes the Model A/B rule engine for the listing wizard
-- `POST /api/uploads/sign` signs direct Cloudinary uploads for listing images and ownership proofs
+- `POST /api/uploads/sign` signs direct Cloudinary uploads for listing images and ownership proofs, but now requires a signed owner-side session
 - `/sign-in`, `/dashboard`, and `/admin` now provide a protected workspace using a signed session cookie
 - `/listings/new` now includes browser autosave, Cloudinary uploads, persistent draft save/update, and draft submission for admin review
 - `/admin` now shows a live review queue with approve/reject actions and audit logging
 - `/admin` now also surfaces recent audit activity so operations can review unlocks, seeker posts, blocked messages, and review decisions in one place
 - `/listings` and `/listings/[listingId]` now expose the public marketplace and locked-contact detail view for approved listings
-- `POST /api/listings/[listingId]/unlock` now records the prototype token unlock flow for signed-in users
-- Buyer dashboards now show unlock history, token-fee payment records, and recommended approved listings
+- `POST /api/listings/[listingId]/unlock` now creates a pending checkout intent for signed-in users and only unlocks contact after payment settlement
+- Buyer dashboards now show unlock history, pending checkout actions, payment records, and recommended approved listings
 - `GET` and `POST /api/listings/[listingId]/messages` now support pre-unlock buyer inquiries with blocked contact-sharing rules and audit logging
 - Owner dashboards now surface recent buyer inquiries for approved listings
 - `POST /api/seeker-requests` now records anonymized buyer demand posts with a prototype seeker posting fee
 - `/seeker-requests` and `/seeker-requests/new` now expose the public seeker board and protected buyer request form
 - Buyer dashboards now include live seeker request history and active seeker counts
-- `POST /api/seeker-requests/[requestId]/unlock` now records prototype owner-side seeker contact unlocks with payment and audit logs
+- `POST /api/seeker-requests/[requestId]/unlock` now creates a pending checkout intent for owner-side seeker contact unlocks and applies access after settlement
 - `/seeker-requests/[requestId]` now exposes a detail page with locked seeker contact fields and owner-side unlock flow
 - `POST /api/seeker-requests/[requestId]/responses` now lets unlocked owner-side accounts send or update a direct response to the seeker
 - Buyer dashboards and seeker detail pages now surface the owner responses received on live seeker requests
@@ -78,8 +84,25 @@ The initial build favors:
 - `POST /api/admin/fee-settings` now stores fee settings in MongoDB and applies them to new drafts, seeker posts, and fallback fee displays
 - Listing drafts, listing unlocks, seeker posting, and seeker unlock pricing now flow through shared platform fee settings instead of hard-coded fallback amounts
 - `docs/engineering-roadmap.md` now tracks the remaining production work in priority order
-- `src/lib/payments/workflow.ts` now centralizes payment record creation and admin payment analytics so future AfrIPay integration has one shared path
-- `/admin` now includes a payment overview with paid totals, revenue splits, and a recent ledger
+- `src/lib/payments/workflow.ts` now centralizes payment records, pending checkout intents, legacy AfrIPay form-post handoff data, idempotent settlement, and unlock-effect application
+- `/payments/checkout/[reference]` now hosts either the mock confirmation screen or a real AfrIPay auto-post handoff depending on `PAYMENT_PROVIDER_MODE`
+- `/api/payments/callback/afripay` now accepts both query-string and form-post returns, maps recognizable statuses automatically, and keeps ambiguous returns pending for manual review instead of unlocking incorrectly
+- `/api/payments/webhooks/afripay` now accepts `client_token` as a payment reference fallback for legacy payloads
+- AfrIPay callback and webhook routes now share the same route-input validation layer and provider-status mapping instead of duplicating parsing logic
+- Listing and seeker detail pages now surface payment return-state banners so paid, failed, and cancelled checkout outcomes read clearly after redirect
+- `/admin` now includes cancelled-payment counts and a payment transition feed so operations can see pending, failed, cancelled, and settled movements in one payment-native view
+- Sign-in, unlock, seeker-post, and messaging write routes now use Mongo-backed rate limiting with response headers and retry hints
+- Draft save/submit, upload-sign, admin review/settings, lifecycle changes, notification-read, seeker responses, and mock payment completion now use the same durable rate-limit layer
+- Core write routes now share a reusable JSON-object parser and input-error helper so malformed payloads fail consistently instead of being handled ad hoc
+- `/api/status` now reports safe AfrIPay config visibility, including the configured checkout contract, whether server credentials are present, and whether the configured checkout endpoint is publicly reachable from the server
+
+## AfrIPay Security Note
+
+- Never place `app_id`, `app_secret`, API keys, or webhook secrets in Blade templates, React components, or any other client-delivered code
+- If those values were visible in frontend templates, treat them as exposed and rotate them before using them again
+- Keep live AfrIPay credentials in server env vars only
+- Payment creation, payment status transitions, and ambiguous gateway returns are now recorded in immutable audit logs under `entityType: "payment"`
+- `/admin` now includes a payment overview with paid totals, revenue splits, cancelled counts, a recent ledger, and recent payment transition events
 - `src/lib/notifications/workflow.ts` now centralizes in-app notifications for review, inquiry, unlock, and seeker events
 - `/dashboard`, `/admin`, and the header shell now expose unread notification counts and a notification center
 - `POST /api/listings/[listingId]/status` now lets owners move approved listings through lifecycle states like under negotiation, sold, rented, not concluded, expired, and back to active when allowed
@@ -99,6 +122,9 @@ If Cloudinary works but MongoDB does not, check Atlas before changing code:
 - `/api/status`
 - `/api/admin/fee-settings`
 - `/api/auth/session`
+- `/api/payments/callback/afripay`
+- `/api/payments/mock/[reference]/complete`
+- `/api/payments/webhooks/afripay`
 - `/api/listings/[listingId]/messages`
 - `/api/listings/[listingId]/unlock`
 - `/api/listings/eligibility?category=real_estate_rent&units=1&priceRwf=1500000`
@@ -114,6 +140,7 @@ If Cloudinary works but MongoDB does not, check Atlas before changing code:
 - `/listings`
 - `/listings/[listingId]`
 - `/listings/new`
+- `/payments/checkout/[reference]`
 - `/seeker-requests`
 - `/seeker-requests/[requestId]`
 - `/seeker-requests/new`

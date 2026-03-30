@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { PaymentReturnNotice } from "@/components/payments/payment-return-notice";
 import { formatRwf } from "@/lib/formatting/currency";
+import type { PaymentReturnStatus } from "@/lib/payments/search-params";
 
 type UnlockContactPanelProps = {
   listingId: string;
@@ -15,6 +17,8 @@ type UnlockContactPanelProps = {
   exactAddress: string;
   signedIn: boolean;
   initiallyUnlocked: boolean;
+  paymentStatus?: PaymentReturnStatus | null;
+  paymentReference?: string | null;
 };
 
 export function UnlockContactPanel({
@@ -26,6 +30,8 @@ export function UnlockContactPanel({
   exactAddress,
   signedIn,
   initiallyUnlocked,
+  paymentStatus,
+  paymentReference,
 }: UnlockContactPanelProps) {
   const router = useRouter();
   const [isUnlocking, setIsUnlocking] = useState(false);
@@ -42,15 +48,31 @@ export function UnlockContactPanel({
       const response = await fetch(`/api/listings/${listingId}/unlock`, {
         method: "POST",
       });
-      const payload = (await response.json()) as { message?: string; reused?: boolean };
+      const payload = (await response.json()) as {
+        message?: string;
+        reused?: boolean;
+        unlocked?: boolean;
+        checkoutUrl?: string | null;
+      };
 
       if (!response.ok) {
         throw new Error(payload.message ?? "Could not unlock the listing.");
       }
 
-      setUnlocked(true);
-      setMessage(payload.reused ? "This listing was already unlocked in your account." : "Listing contact details unlocked for this account.");
-      router.refresh();
+      if (payload.unlocked) {
+        setUnlocked(true);
+        setMessage(payload.reused ? "This listing was already unlocked in your account." : "Listing contact details unlocked for this account.");
+        router.refresh();
+        return;
+      }
+
+      if (payload.checkoutUrl) {
+        setMessage("Checkout created. Redirecting to the payment confirmation screen...");
+        window.location.assign(payload.checkoutUrl);
+        return;
+      }
+
+      throw new Error("A payment checkout could not be created for this listing.");
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Could not unlock the listing.");
     } finally {
@@ -61,6 +83,11 @@ export function UnlockContactPanel({
   if (unlocked) {
     return (
       <section className="rounded-[28px] border border-[rgba(26,122,74,0.24)] bg-[linear-gradient(180deg,#edfaf3,#f7fffb)] p-6 shadow-[0_20px_50px_rgba(26,122,74,0.12)]">
+        {paymentStatus === "paid" ? (
+          <div className="mb-4">
+            <PaymentReturnNotice status={paymentStatus} reference={paymentReference} subject="Listing contact unlock" />
+          </div>
+        ) : null}
         <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary)]">Access unlocked</p>
         <h2 className="mt-3 font-[var(--font-display)] text-3xl text-[var(--foreground)]">Direct owner details are now visible.</h2>
         <div className="mt-5 space-y-3 rounded-[24px] border border-[rgba(26,122,74,0.18)] bg-white/80 p-4 text-sm leading-6 text-[var(--foreground)]">
@@ -78,7 +105,7 @@ export function UnlockContactPanel({
           </div>
         </div>
         <p className="mt-4 text-sm leading-6 text-[var(--muted)]">
-          This is the prototype unlock flow. The immutable unlock record is already stored; the real AfrIPay payment step will plug into the same access path.
+          Your unlock is now tied to a settled payment record, and the AfrIPay handoff uses the same payment reference and return path.
         </p>
         {message ? <div className="mt-4 rounded-2xl border border-[rgba(26,122,74,0.24)] bg-[rgba(26,122,74,0.08)] px-4 py-3 text-sm text-[var(--primary)]">{message}</div> : null}
       </section>
@@ -87,6 +114,11 @@ export function UnlockContactPanel({
 
   return (
     <section className="rounded-[28px] border border-[rgba(200,134,10,0.24)] bg-[linear-gradient(180deg,#fff8ec,#fff4db)] p-6 shadow-[0_20px_50px_rgba(200,134,10,0.12)]">
+      {paymentStatus ? (
+        <div className="mb-4">
+          <PaymentReturnNotice status={paymentStatus} reference={paymentReference} subject="Listing contact unlock" />
+        </div>
+      ) : null}
       <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">Locked contact panel</p>
       <h2 className="mt-3 font-[var(--font-display)] text-3xl text-[var(--foreground)]">Owner contact stays private until unlock.</h2>
       <div className="mt-5 space-y-3 rounded-[24px] border border-[rgba(200,134,10,0.2)] bg-white/70 p-4 text-sm leading-6 text-[var(--muted)]">
@@ -122,10 +154,10 @@ export function UnlockContactPanel({
             }`}
           >
             {isUnlocking
-              ? "Unlocking..."
+              ? "Preparing checkout..."
               : tokenFeeEnabled && tokenFeeRwf
-                ? `Prototype unlock for ${formatRwf(tokenFeeRwf)}`
-                : "Prototype unlock"}
+                ? `Pay ${formatRwf(tokenFeeRwf)} to unlock`
+                : "Unlock details"}
           </button>
         ) : (
           <Link
@@ -143,7 +175,7 @@ export function UnlockContactPanel({
         </Link>
       </div>
       <p className="mt-4 text-sm leading-6 text-[var(--muted)]">
-        Payment is still in prototype mode, so this button simulates the serious-buyer unlock step while preserving the immutable audit record.
+        The payment flow now creates a pending checkout first, then reveals contact details only after the payment is confirmed.
       </p>
       {message ? <div className="mt-4 rounded-2xl border border-[rgba(26,122,74,0.24)] bg-[rgba(26,122,74,0.08)] px-4 py-3 text-sm text-[var(--primary)]">{message}</div> : null}
       {error ? <div className="mt-4 rounded-2xl border border-[rgba(184,50,50,0.2)] bg-[rgba(184,50,50,0.08)] px-4 py-3 text-sm text-[#9c2d2d]">{error}</div> : null}
