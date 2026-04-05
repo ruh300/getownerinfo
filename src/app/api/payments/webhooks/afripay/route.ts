@@ -1,36 +1,24 @@
-import { timingSafeEqual } from "node:crypto";
-
 import { NextRequest, NextResponse } from "next/server";
 
 import { getServerEnv } from "@/lib/env";
 import {
-  getOptionalTrimmedString,
   getRouteErrorResponse,
   readJsonObjectBody,
   RouteInputError,
 } from "@/lib/http/route-input";
-import { mapAfripayPaymentStatus } from "@/lib/payments/afripay";
-import { transitionPaymentStatusByReference } from "@/lib/payments/workflow";
+import { isAfripayWebhookSecretValid, resolveAfripaySignal, toAfripayFieldBag } from "@/lib/payments/afripay-signal";
+import { recordPaymentGatewaySignalByReference, transitionPaymentStatusByReference } from "@/lib/payments/workflow";
 
 function hasValidWebhookSecret(request: NextRequest) {
   const env = getServerEnv();
   const configuredSecret = env.AFRIPAY_WEBHOOK_SECRET;
 
-  if (!configuredSecret) {
-    return true;
-  }
-
   const headerValue =
     request.headers.get("x-afripay-webhook-secret") ??
     request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ??
     "";
-  const providedBuffer = Buffer.from(headerValue);
-  const expectedBuffer = Buffer.from(configuredSecret);
 
-  return (
-    providedBuffer.length === expectedBuffer.length &&
-    timingSafeEqual(providedBuffer, expectedBuffer)
-  );
+  return isAfripayWebhookSecretValid(configuredSecret, headerValue);
 }
 
 export async function POST(request: NextRequest) {
@@ -40,39 +28,46 @@ export async function POST(request: NextRequest) {
     }
 
     const payload = await readJsonObjectBody(request);
-    const reference = getOptionalTrimmedString(payload, "reference") ?? getOptionalTrimmedString(payload, "client_token");
-    const rawStatus =
-      getOptionalTrimmedString(payload, "status") ??
-      getOptionalTrimmedString(payload, "payment_status") ??
-      getOptionalTrimmedString(payload, "transaction_status") ??
-      getOptionalTrimmedString(payload, "state");
-    const mappedStatus = mapAfripayPaymentStatus(rawStatus);
+    const signal = resolveAfripaySignal({
+      source: "webhook",
+      transport: "json",
+      body: toAfripayFieldBag(payload),
+    });
 
-    if (!reference || !mappedStatus) {
-      throw new RouteInputError("The AfrIPay webhook is missing a valid reference or status.");
+    if (!signal.reference) {
+      throw new RouteInputError("The AfrIPay webhook is missing a valid payment reference.");
+    }
+
+    if (!signal.mappedStatus) {
+      const result = await recordPaymentGatewaySignalByReference({
+        reference: signal.reference,
+        action: "payment_gateway_webhook_received",
+        source: "afripay_webhook",
+        providerReference: signal.providerReference ?? undefined,
+        providerTransactionId: signal.providerTransactionId ?? undefined,
+        lastProviderStatus: signal.rawStatus ?? undefined,
+        failureReason: signal.failureReason ?? undefined,
+        markWebhookSeen: true,
+        metadata: signal.safeMetadata,
+      });
+
+      return NextResponse.json({
+        status: "accepted",
+        paymentStatus: result.payment.status,
+        reference: result.payment.reference,
+      });
     }
 
     const result = await transitionPaymentStatusByReference({
-      reference,
-      status: mappedStatus,
+      reference: signal.reference,
+      status: signal.mappedStatus,
       source: "afripay_webhook",
-      providerReference:
-        getOptionalTrimmedString(payload, "providerReference") ??
-        getOptionalTrimmedString(payload, "provider_reference") ??
-        getOptionalTrimmedString(payload, "payment_id"),
-      providerTransactionId:
-        getOptionalTrimmedString(payload, "transactionId") ??
-        getOptionalTrimmedString(payload, "transaction_id") ??
-        getOptionalTrimmedString(payload, "txn_id"),
-      lastProviderStatus: rawStatus ?? undefined,
-      failureReason:
-        getOptionalTrimmedString(payload, "message") ??
-        getOptionalTrimmedString(payload, "error") ??
-        getOptionalTrimmedString(payload, "comment"),
+      providerReference: signal.providerReference ?? undefined,
+      providerTransactionId: signal.providerTransactionId ?? undefined,
+      lastProviderStatus: signal.rawStatus ?? undefined,
+      failureReason: signal.failureReason ?? undefined,
       markWebhookSeen: true,
-      metadata: {
-        webhookStatus: rawStatus,
-      },
+      metadata: signal.safeMetadata,
     });
 
     return NextResponse.json({

@@ -26,6 +26,12 @@ function cloneSettings(settings: FeeSettingsSummary): FeeSettingsSummary {
     ) as FeeSettingsSummary["listingTokenFeeMatrix"],
     seekerPostFeeByDuration: { ...settings.seekerPostFeeByDuration },
     seekerViewTokenFeeRwf: settings.seekerViewTokenFeeRwf,
+    saleCommissionRateBpsByCategory: { ...settings.saleCommissionRateBpsByCategory },
+    rentalCommissionMonthsEquivalent: settings.rentalCommissionMonthsEquivalent,
+    commissionDueDays: settings.commissionDueDays,
+    penaltyPercentageBps: settings.penaltyPercentageBps,
+    penaltyFixedAmountRwf: settings.penaltyFixedAmountRwf,
+    penaltyDueDays: settings.penaltyDueDays,
   };
 }
 
@@ -59,6 +65,18 @@ export function FeeSettingsPanel({ settings, canEdit }: FeeSettingsPanelProps) {
       seekerPostFeeByDuration: {
         ...current.seekerPostFeeByDuration,
         [duration]: Number.isFinite(nextValue) ? Math.max(0, Math.round(nextValue)) : 0,
+      },
+    }));
+  }
+
+  function updateSaleCommissionRate(category: ListingCategory, amount: string) {
+    const nextValue = Number(amount);
+
+    setDraft((current) => ({
+      ...current,
+      saleCommissionRateBpsByCategory: {
+        ...current.saleCommissionRateBpsByCategory,
+        [category]: Number.isFinite(nextValue) ? Math.max(0, Math.round(nextValue)) : 0,
       },
     }));
   }
@@ -98,7 +116,7 @@ export function FeeSettingsPanel({ settings, canEdit }: FeeSettingsPanelProps) {
         <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Fee settings</p>
         <h2 className="mt-2 font-[var(--font-display)] text-3xl">Platform fee controls</h2>
         <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
-          Configure the current prototype token-fee matrix for listings and seeker workflows. All values are stored in Rwandan francs and apply to new activity.
+          Configure the current prototype fee matrix for listing unlocks, seeker workflows, and Model A commission invoices. Currency amounts are stored in Rwandan francs and commission sale rates are stored in basis points.
         </p>
       </div>
 
@@ -190,6 +208,155 @@ export function FeeSettingsPanel({ settings, canEdit }: FeeSettingsPanelProps) {
         </article>
       </section>
 
+      <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <article className="rounded-[28px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_20px_50px_rgba(0,0,0,0.06)]">
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Model A commissions</p>
+          <h3 className="mt-2 font-[var(--font-display)] text-3xl">Sale commission rates by category</h3>
+          <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
+            These basis-point rates are applied when a Model A listing is marked sold. Example: <span className="font-semibold text-[var(--foreground)]">500 bps = 5%</span>.
+          </p>
+          <div className="mt-5 grid gap-4 lg:grid-cols-2">
+            {listingCategories.map((category) => (
+              <label key={category} className="space-y-2 rounded-[24px] border border-[var(--border)] bg-[var(--surface-alt)] p-4">
+                <span className="text-sm font-semibold text-[var(--foreground)]">{getCategoryLabel(category)}</span>
+                <input
+                  type="number"
+                  min="0"
+                  disabled={!canEdit || isSaving}
+                  value={draft.saleCommissionRateBpsByCategory[category]}
+                  onChange={(event) => updateSaleCommissionRate(category, event.target.value)}
+                  className="w-full rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm outline-none transition focus:border-[var(--primary)] disabled:cursor-not-allowed disabled:bg-[rgba(0,0,0,0.03)]"
+                />
+              </label>
+            ))}
+          </div>
+        </article>
+
+        <article className="rounded-[28px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_20px_50px_rgba(0,0,0,0.06)]">
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Invoice timing</p>
+          <h3 className="mt-2 font-[var(--font-display)] text-3xl">Rental commission and due date</h3>
+          <div className="mt-5 grid gap-4">
+            <label className="space-y-2">
+              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--primary-light)]">
+                Rental commission months equivalent
+              </span>
+              <input
+                type="number"
+                min="1"
+                disabled={!canEdit || isSaving}
+                value={draft.rentalCommissionMonthsEquivalent}
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    rentalCommissionMonthsEquivalent: Math.max(1, Math.round(Number(event.target.value) || 1)),
+                  }))
+                }
+                className="w-full rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm outline-none transition focus:border-[var(--primary)] disabled:cursor-not-allowed disabled:bg-[rgba(0,0,0,0.03)]"
+              />
+            </label>
+
+            <label className="space-y-2">
+              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--primary-light)]">
+                Commission due days
+              </span>
+              <input
+                type="number"
+                min="1"
+                disabled={!canEdit || isSaving}
+                value={draft.commissionDueDays}
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    commissionDueDays: Math.max(1, Math.round(Number(event.target.value) || 1)),
+                  }))
+                }
+                className="w-full rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm outline-none transition focus:border-[var(--primary)] disabled:cursor-not-allowed disabled:bg-[rgba(0,0,0,0.03)]"
+              />
+            </label>
+          </div>
+          <div className="mt-5 rounded-[24px] bg-[var(--surface-alt)] px-4 py-4 text-sm leading-6 text-[var(--muted)]">
+            <p>Rental commission currently uses {draft.rentalCommissionMonthsEquivalent} month(s) of the reported rent.</p>
+            <p className="mt-2">Generated commission invoices are due {draft.commissionDueDays} day(s) after the owner reports a sold or rented outcome.</p>
+          </div>
+        </article>
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-[1fr_0.95fr]">
+        <article className="rounded-[28px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_20px_50px_rgba(0,0,0,0.06)]">
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Penalty defaults</p>
+          <h3 className="mt-2 font-[var(--font-display)] text-3xl">System penalty formula</h3>
+          <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
+            These settings power automatic penalty amounts when the platform confirms overdue commission or other enforced violations.
+          </p>
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
+            <label className="space-y-2">
+              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--primary-light)]">
+                Penalty percentage basis points
+              </span>
+              <input
+                type="number"
+                min="0"
+                disabled={!canEdit || isSaving}
+                value={draft.penaltyPercentageBps}
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    penaltyPercentageBps: Math.max(0, Math.round(Number(event.target.value) || 0)),
+                  }))
+                }
+                className="w-full rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm outline-none transition focus:border-[var(--primary)] disabled:cursor-not-allowed disabled:bg-[rgba(0,0,0,0.03)]"
+              />
+            </label>
+
+            <label className="space-y-2">
+              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--primary-light)]">
+                Penalty fixed amount
+              </span>
+              <input
+                type="number"
+                min="0"
+                disabled={!canEdit || isSaving}
+                value={draft.penaltyFixedAmountRwf}
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    penaltyFixedAmountRwf: Math.max(0, Math.round(Number(event.target.value) || 0)),
+                  }))
+                }
+                className="w-full rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm outline-none transition focus:border-[var(--primary)] disabled:cursor-not-allowed disabled:bg-[rgba(0,0,0,0.03)]"
+              />
+            </label>
+          </div>
+        </article>
+
+        <article className="rounded-[28px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_20px_50px_rgba(0,0,0,0.06)]">
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Penalty timing</p>
+          <h3 className="mt-2 font-[var(--font-display)] text-3xl">Due-date controls</h3>
+          <label className="mt-5 block space-y-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--primary-light)]">Penalty due days</span>
+            <input
+              type="number"
+              min="1"
+              disabled={!canEdit || isSaving}
+              value={draft.penaltyDueDays}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  penaltyDueDays: Math.max(1, Math.round(Number(event.target.value) || 1)),
+                }))
+              }
+              className="w-full rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm outline-none transition focus:border-[var(--primary)] disabled:cursor-not-allowed disabled:bg-[rgba(0,0,0,0.03)]"
+            />
+          </label>
+          <div className="mt-5 rounded-[24px] bg-[var(--surface-alt)] px-4 py-4 text-sm leading-6 text-[var(--muted)]">
+            <p>
+              Current default formula: {draft.penaltyPercentageBps / 100}% of the base amount + {formatRwf(draft.penaltyFixedAmountRwf)}.
+            </p>
+            <p className="mt-2">New penalty invoices are due {draft.penaltyDueDays} day(s) after they are assessed.</p>
+          </div>
+        </article>
+      </section>
+
       <div className="flex flex-wrap gap-3">
         {canEdit ? (
           <button
@@ -210,7 +377,7 @@ export function FeeSettingsPanel({ settings, canEdit }: FeeSettingsPanelProps) {
           </div>
         )}
         <div className="rounded-full border border-[var(--border)] px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-          Values are VAT-inclusive and non-refundable in the prototype ledger
+          Values are VAT-inclusive where applicable. Commission invoices stay system-generated and non-editable by owners.
         </div>
       </div>
 

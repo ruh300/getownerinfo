@@ -1,5 +1,5 @@
 import { getServerEnv, maskSecret } from "@/lib/env";
-import type { PaymentStatus } from "@/lib/domain";
+export { mapAfripayPaymentStatus } from "@/lib/payments/afripay-signal";
 
 type AfripayAppCredentials = {
   mode: "app_credentials";
@@ -130,26 +130,4 @@ export async function probeAfripayGateway(): Promise<AfripayGatewayProbe> {
       error: error instanceof Error ? error.message : "Unknown AfrIPay gateway probe error",
     };
   }
-}
-
-export function mapAfripayPaymentStatus(rawStatus: string | null | undefined): Extract<PaymentStatus, "paid" | "failed" | "cancelled"> | null {
-  const normalized = rawStatus?.trim().toLowerCase();
-
-  if (!normalized) {
-    return null;
-  }
-
-  if (["paid", "success", "successful", "completed", "complete"].includes(normalized)) {
-    return "paid";
-  }
-
-  if (["failed", "failure", "declined", "error"].includes(normalized)) {
-    return "failed";
-  }
-
-  if (["cancelled", "canceled", "abandoned"].includes(normalized)) {
-    return "cancelled";
-  }
-
-  return null;
 }

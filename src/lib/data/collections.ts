@@ -3,10 +3,14 @@ import type { Collection } from "mongodb";
 import {
   type AuditLogDocument,
   type ChatMessageDocument,
+  type CommissionCaseDocument,
   type FeeSettingsDocument,
+  type InvestigationCaseDocument,
+  type InvestigationUpdateDocument,
   type ListingDraftDocument,
   type ListingDocument,
   type NotificationDocument,
+  type PenaltyDocument,
   type PaymentDocument,
   type RateLimitBucketDocument,
   type SeekerMatchMessageDocument,
@@ -30,6 +34,10 @@ export const collectionNames = {
   listingDrafts: "listingDrafts",
   seekerRequests: "seekerRequests",
   payments: "payments",
+  commissionCases: "commissionCases",
+  investigationCases: "investigationCases",
+  investigationUpdates: "investigationUpdates",
+  penalties: "penalties",
   feeSettings: "feeSettings",
   tokenUnlocks: "tokenUnlocks",
   seekerRequestUnlocks: "seekerRequestUnlocks",
@@ -47,6 +55,10 @@ type CollectionMap = {
   listingDrafts: ListingDraftDocument;
   seekerRequests: SeekerRequestDocument;
   payments: PaymentDocument;
+  commissionCases: CommissionCaseDocument;
+  investigationCases: InvestigationCaseDocument;
+  investigationUpdates: InvestigationUpdateDocument;
+  penalties: PenaltyDocument;
   feeSettings: FeeSettingsDocument;
   tokenUnlocks: TokenUnlockDocument;
   seekerRequestUnlocks: SeekerRequestUnlockDocument;
@@ -71,6 +83,10 @@ async function initializeCoreIndexes() {
   const listingDrafts = db.collection<ListingDraftDocument>(collectionNames.listingDrafts);
   const seekerRequests = db.collection<SeekerRequestDocument>(collectionNames.seekerRequests);
   const payments = db.collection<PaymentDocument>(collectionNames.payments);
+  const commissionCases = db.collection<CommissionCaseDocument>(collectionNames.commissionCases);
+  const investigationCases = db.collection<InvestigationCaseDocument>(collectionNames.investigationCases);
+  const investigationUpdates = db.collection<InvestigationUpdateDocument>(collectionNames.investigationUpdates);
+  const penalties = db.collection<PenaltyDocument>(collectionNames.penalties);
   const feeSettings = db.collection<FeeSettingsDocument>(collectionNames.feeSettings);
   const tokenUnlocks = db.collection<TokenUnlockDocument>(collectionNames.tokenUnlocks);
   const seekerRequestUnlocks = db.collection<SeekerRequestUnlockDocument>(collectionNames.seekerRequestUnlocks);
@@ -102,6 +118,18 @@ async function initializeCoreIndexes() {
     payments.createIndex({ idempotencyKey: 1 }, { unique: true, sparse: true }),
     payments.createIndex({ providerReference: 1 }, { sparse: true }),
     payments.createIndex({ providerTransactionId: 1 }, { sparse: true }),
+    commissionCases.createIndex({ listingId: 1 }, { unique: true }),
+    commissionCases.createIndex({ ownerUserId: 1, status: 1, dueAt: 1 }),
+    commissionCases.createIndex({ status: 1, dueAt: 1 }),
+    investigationCases.createIndex({ entityType: 1, entityId: 1, status: 1, createdAt: -1 }),
+    investigationCases.createIndex({ status: 1, priority: 1, updatedAt: -1 }),
+    investigationCases.createIndex({ subjectUserId: 1, updatedAt: -1 }, { sparse: true }),
+    investigationUpdates.createIndex({ caseId: 1, createdAt: -1 }),
+    investigationUpdates.createIndex({ authorUserId: 1, createdAt: -1 }),
+    penalties.createIndex({ ownerUserId: 1, status: 1, createdAt: -1 }),
+    penalties.createIndex({ status: 1, dueAt: 1 }),
+    penalties.createIndex({ commissionCaseId: 1, offenseType: 1 }, { unique: true, sparse: true }),
+    penalties.createIndex({ listingId: 1, createdAt: -1 }, { sparse: true }),
     feeSettings.createIndex({ key: 1 }, { unique: true }),
     tokenUnlocks.createIndex({ userId: 1, listingId: 1, unlockedAt: -1 }),
     seekerRequestUnlocks.createIndex({ userId: 1, seekerRequestId: 1, unlockedAt: -1 }),
@@ -117,6 +145,8 @@ async function initializeCoreIndexes() {
     chatMessages.createIndex({ ownerUserId: 1, status: 1, createdAt: -1 }),
     chatMessages.createIndex({ senderUserId: 1, status: 1, createdAt: -1 }),
     auditLogs.createIndex({ entityType: 1, entityId: 1, createdAt: -1 }),
+    auditLogs.createIndex({ action: 1, createdAt: -1 }),
+    auditLogs.createIndex({ actorUserId: 1, createdAt: -1 }, { sparse: true }),
     notifications.createIndex({ userId: 1, readAt: 1, createdAt: -1 }),
     notifications.createIndex({ userId: 1, createdAt: -1 }),
     rateLimitBuckets.createIndex({ key: 1 }, { unique: true }),

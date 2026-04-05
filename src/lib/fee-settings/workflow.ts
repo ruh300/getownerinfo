@@ -18,6 +18,12 @@ export type FeeSettingsSummary = {
   listingTokenFeeMatrix: ListingTokenFeeMatrix;
   seekerPostFeeByDuration: SeekerPostFeeByDuration;
   seekerViewTokenFeeRwf: number;
+  saleCommissionRateBpsByCategory: FeeSettingsDocument["saleCommissionRateBpsByCategory"];
+  rentalCommissionMonthsEquivalent: number;
+  commissionDueDays: number;
+  penaltyPercentageBps: number;
+  penaltyFixedAmountRwf: number;
+  penaltyDueDays: number;
 };
 
 const feeSettingsKey: FeeSettingsDocument["key"] = "default";
@@ -40,11 +46,30 @@ function createDefaultSeekerPostFeeByDuration(): SeekerPostFeeByDuration {
   };
 }
 
+function createDefaultSaleCommissionRateBpsByCategory(): FeeSettingsDocument["saleCommissionRateBpsByCategory"] {
+  return {
+    real_estate_rent: 0,
+    real_estate_sale: 500,
+    vehicles_for_sale: 400,
+    vehicle_resellers: 250,
+    furniture: 500,
+    made_in_rwanda: 500,
+    home_appliances: 500,
+    business_industry: 400,
+  };
+}
+
 export function getDefaultFeeSettings(): FeeSettingsSummary {
   return {
     listingTokenFeeMatrix: createDefaultListingTokenFeeMatrix(),
     seekerPostFeeByDuration: createDefaultSeekerPostFeeByDuration(),
     seekerViewTokenFeeRwf: defaultSeekerViewTokenFeeRwf,
+    saleCommissionRateBpsByCategory: createDefaultSaleCommissionRateBpsByCategory(),
+    rentalCommissionMonthsEquivalent: 1,
+    commissionDueDays: 14,
+    penaltyPercentageBps: 5_000,
+    penaltyFixedAmountRwf: 100_000,
+    penaltyDueDays: 14,
   };
 }
 
@@ -102,6 +127,38 @@ function normalizeSeekerPostFeeByDuration(value: unknown): SeekerPostFeeByDurati
   };
 }
 
+function normalizeSaleCommissionRateBpsByCategory(
+  value: unknown,
+): FeeSettingsDocument["saleCommissionRateBpsByCategory"] {
+  const defaults = createDefaultSaleCommissionRateBpsByCategory();
+
+  if (typeof value !== "object" || value === null) {
+    return defaults;
+  }
+
+  const candidate = value as Record<string, unknown>;
+
+  return Object.fromEntries(
+    listingCategories.map((category) => [
+      category,
+      normalizeCurrencyAmount(
+        candidate[category] ?? defaults[category],
+        `${category} sale commission rate`,
+      ),
+    ]),
+  ) as FeeSettingsDocument["saleCommissionRateBpsByCategory"];
+}
+
+function normalizePositiveWholeNumber(value: unknown, label: string, minimum = 1) {
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed) || parsed < minimum || !Number.isInteger(parsed)) {
+    throw new Error(`${label} must be a whole number greater than or equal to ${minimum}.`);
+  }
+
+  return parsed;
+}
+
 function serializeFeeSettings(document: FeeSettingsDocument | null | undefined): FeeSettingsSummary {
   const defaults = getDefaultFeeSettings();
 
@@ -109,6 +166,14 @@ function serializeFeeSettings(document: FeeSettingsDocument | null | undefined):
     listingTokenFeeMatrix: document?.listingTokenFeeMatrix ?? defaults.listingTokenFeeMatrix,
     seekerPostFeeByDuration: document?.seekerPostFeeByDuration ?? defaults.seekerPostFeeByDuration,
     seekerViewTokenFeeRwf: document?.seekerViewTokenFeeRwf ?? defaults.seekerViewTokenFeeRwf,
+    saleCommissionRateBpsByCategory:
+      document?.saleCommissionRateBpsByCategory ?? defaults.saleCommissionRateBpsByCategory,
+    rentalCommissionMonthsEquivalent:
+      document?.rentalCommissionMonthsEquivalent ?? defaults.rentalCommissionMonthsEquivalent,
+    commissionDueDays: document?.commissionDueDays ?? defaults.commissionDueDays,
+    penaltyPercentageBps: document?.penaltyPercentageBps ?? defaults.penaltyPercentageBps,
+    penaltyFixedAmountRwf: document?.penaltyFixedAmountRwf ?? defaults.penaltyFixedAmountRwf,
+    penaltyDueDays: document?.penaltyDueDays ?? defaults.penaltyDueDays,
   };
 }
 
@@ -128,6 +193,17 @@ export async function upsertFeeSettings(input: FeeSettingsSummary) {
     listingTokenFeeMatrix: normalizeListingTokenFeeMatrix(input.listingTokenFeeMatrix),
     seekerPostFeeByDuration: normalizeSeekerPostFeeByDuration(input.seekerPostFeeByDuration),
     seekerViewTokenFeeRwf: normalizeCurrencyAmount(input.seekerViewTokenFeeRwf, "Seeker view token fee"),
+    saleCommissionRateBpsByCategory: normalizeSaleCommissionRateBpsByCategory(
+      input.saleCommissionRateBpsByCategory,
+    ),
+    rentalCommissionMonthsEquivalent: normalizePositiveWholeNumber(
+      input.rentalCommissionMonthsEquivalent,
+      "Rental commission months equivalent",
+    ),
+    commissionDueDays: normalizePositiveWholeNumber(input.commissionDueDays, "Commission due days"),
+    penaltyPercentageBps: normalizeCurrencyAmount(input.penaltyPercentageBps, "Penalty percentage basis points"),
+    penaltyFixedAmountRwf: normalizeCurrencyAmount(input.penaltyFixedAmountRwf, "Penalty fixed amount"),
+    penaltyDueDays: normalizePositiveWholeNumber(input.penaltyDueDays, "Penalty due days"),
   };
   const result = await feeSettings.findOneAndUpdate(
     {
@@ -173,4 +249,31 @@ export function resolveSeekerPostFeeRwf(
 
 export function resolveSeekerViewTokenFeeRwf(settings: FeeSettingsSummary) {
   return settings.seekerViewTokenFeeRwf;
+}
+
+export function resolveSaleCommissionRateBps(
+  settings: FeeSettingsSummary,
+  category: ListingCategory,
+) {
+  return settings.saleCommissionRateBpsByCategory[category];
+}
+
+export function resolveRentalCommissionMonthsEquivalent(settings: FeeSettingsSummary) {
+  return settings.rentalCommissionMonthsEquivalent;
+}
+
+export function resolveCommissionDueDays(settings: FeeSettingsSummary) {
+  return settings.commissionDueDays;
+}
+
+export function resolvePenaltyPercentageBps(settings: FeeSettingsSummary) {
+  return settings.penaltyPercentageBps;
+}
+
+export function resolvePenaltyFixedAmountRwf(settings: FeeSettingsSummary) {
+  return settings.penaltyFixedAmountRwf;
+}
+
+export function resolvePenaltyDueDays(settings: FeeSettingsSummary) {
+  return settings.penaltyDueDays;
 }

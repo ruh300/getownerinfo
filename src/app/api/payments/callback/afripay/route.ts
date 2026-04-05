@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getRouteErrorResponse, RouteInputError } from "@/lib/http/route-input";
-import { mapAfripayPaymentStatus } from "@/lib/payments/afripay";
+import { resolveAfripaySignal } from "@/lib/payments/afripay-signal";
 import {
   recordPaymentGatewaySignalByReference,
   transitionPaymentStatusByReference,
@@ -9,21 +9,8 @@ import {
 
 type CallbackFields = Record<string, string>;
 
-function getTrimmedValue(value: string | null | undefined) {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : null;
-}
-
-function getFirstValue(...values: Array<string | null | undefined>) {
-  for (const value of values) {
-    const trimmed = getTrimmedValue(value);
-
-    if (trimmed) {
-      return trimmed;
-    }
-  }
-
-  return null;
+function getQueryFields(request: NextRequest) {
+  return Object.fromEntries(request.nextUrl.searchParams.entries());
 }
 
 async function readCallbackFields(request: NextRequest): Promise<CallbackFields> {
@@ -49,107 +36,42 @@ async function readCallbackFields(request: NextRequest): Promise<CallbackFields>
   return fields;
 }
 
-function getCallbackReference(request: NextRequest, fields: CallbackFields) {
-  return getFirstValue(
-    request.nextUrl.searchParams.get("reference"),
-    request.nextUrl.searchParams.get("client_token"),
-    fields.reference,
-    fields.client_token,
-  );
-}
-
-function getCallbackRawStatus(request: NextRequest, fields: CallbackFields) {
-  return getFirstValue(
-    request.nextUrl.searchParams.get("status"),
-    request.nextUrl.searchParams.get("payment_status"),
-    request.nextUrl.searchParams.get("transaction_status"),
-    request.nextUrl.searchParams.get("state"),
-    fields.status,
-    fields.payment_status,
-    fields.transaction_status,
-    fields.state,
-  );
-}
-
-function getProviderReference(request: NextRequest, fields: CallbackFields) {
-  return getFirstValue(
-    request.nextUrl.searchParams.get("providerReference"),
-    request.nextUrl.searchParams.get("provider_reference"),
-    request.nextUrl.searchParams.get("payment_id"),
-    fields.providerReference,
-    fields.provider_reference,
-    fields.payment_id,
-  );
-}
-
-function getProviderTransactionId(request: NextRequest, fields: CallbackFields) {
-  return getFirstValue(
-    request.nextUrl.searchParams.get("transactionId"),
-    request.nextUrl.searchParams.get("transaction_id"),
-    request.nextUrl.searchParams.get("txn_id"),
-    fields.transactionId,
-    fields.transaction_id,
-    fields.txn_id,
-  );
-}
-
-function getFailureMessage(request: NextRequest, fields: CallbackFields) {
-  return getFirstValue(
-    request.nextUrl.searchParams.get("message"),
-    request.nextUrl.searchParams.get("error"),
-    request.nextUrl.searchParams.get("comment"),
-    fields.message,
-    fields.error,
-    fields.comment,
-  );
-}
-
-function getSafeCallbackMetadata(request: NextRequest, fields: CallbackFields) {
-  return {
-    callbackMethod: request.method,
-    returnedClientToken: getFirstValue(fields.client_token, request.nextUrl.searchParams.get("client_token")),
-    returnedAmount: getFirstValue(fields.amount, request.nextUrl.searchParams.get("amount")),
-    returnedCurrency: getFirstValue(fields.currency, request.nextUrl.searchParams.get("currency")),
-    returnedComment: getFirstValue(fields.comment, request.nextUrl.searchParams.get("comment")),
-  };
-}
-
 async function handleCallback(request: NextRequest) {
+  const query = getQueryFields(request);
   const fields = await readCallbackFields(request);
-  const reference = getCallbackReference(request, fields);
+  const signal = resolveAfripaySignal({
+    source: "callback",
+    transport: request.method === "POST" ? "form" : "query",
+    query,
+    body: fields,
+  });
 
-  if (!reference) {
+  if (!signal.reference) {
     throw new RouteInputError("The AfrIPay callback is missing a valid payment reference.");
   }
 
-  const rawStatus = getCallbackRawStatus(request, fields);
-  const mappedStatus = mapAfripayPaymentStatus(rawStatus);
-  const providerReference = getProviderReference(request, fields) ?? undefined;
-  const providerTransactionId = getProviderTransactionId(request, fields) ?? undefined;
-  const failureReason = getFailureMessage(request, fields) ?? undefined;
-
-  if (mappedStatus) {
+  if (signal.mappedStatus) {
     return transitionPaymentStatusByReference({
-      reference,
-      status: mappedStatus,
+      reference: signal.reference,
+      status: signal.mappedStatus,
       source: "afripay_callback",
-      providerReference,
-      providerTransactionId,
-      lastProviderStatus: rawStatus ?? undefined,
-      failureReason,
-      metadata: getSafeCallbackMetadata(request, fields),
+      providerReference: signal.providerReference ?? undefined,
+      providerTransactionId: signal.providerTransactionId ?? undefined,
+      lastProviderStatus: signal.rawStatus ?? undefined,
+      failureReason: signal.failureReason ?? undefined,
+      metadata: signal.safeMetadata,
     });
   }
 
   return recordPaymentGatewaySignalByReference({
-    reference,
+    reference: signal.reference,
     action: "payment_gateway_return_received",
     source: "afripay_callback",
-    providerReference,
-    providerTransactionId,
-    lastProviderStatus: rawStatus ?? undefined,
-    failureReason,
-    metadata: getSafeCallbackMetadata(request, fields),
+    providerReference: signal.providerReference ?? undefined,
+    providerTransactionId: signal.providerTransactionId ?? undefined,
+    lastProviderStatus: signal.rawStatus ?? undefined,
+    failureReason: signal.failureReason ?? undefined,
+    metadata: signal.safeMetadata,
   });
 }
 

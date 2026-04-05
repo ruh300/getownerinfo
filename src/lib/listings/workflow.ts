@@ -3,14 +3,21 @@ import { ObjectId, type WithId } from "mongodb";
 import type { AuthSession } from "@/lib/auth/types";
 import { adminRoles } from "@/lib/auth/types";
 import { ensureUserRecord } from "@/lib/auth/user-record";
+import {
+  assertNoOverdueCommissionBlock,
+  createCommissionCaseForListingOutcome,
+  publishCommissionCaseCreated,
+} from "@/lib/commissions/workflow";
 import { getOwnerInquiryFeedForUser, type OwnerInquirySummary } from "@/lib/chat/workflow";
 import { getCollection } from "@/lib/data/collections";
 import type {
   AuditLogDocument,
+  CommissionCaseDocument,
   ListingDocument,
   ListingDraftDocument,
   ListingModel,
   ListingStatus,
+  PenaltyDocument,
   UserDocument,
   UserRole,
 } from "@/lib/domain";
@@ -19,6 +26,7 @@ import { humanizeEnum } from "@/lib/formatting/text";
 import { validateListingDraftInput } from "@/lib/listings/drafts";
 import { canManageListingLifecycle, getAllowedNextListingStatuses, isListingPubliclyVisible } from "@/lib/listings/lifecycle";
 import { createNotification, notifyUsersByIds, notifyUsersByRoles } from "@/lib/notifications/workflow";
+import { assertNoUnpaidPenaltyBlock, resolvePenaltyEffectiveStatus } from "@/lib/penalties/workflow";
 import {
   getSeekerMatchConversationFeedForUser,
   type SeekerMatchConversationSummary,
@@ -72,8 +80,10 @@ export type AdminReviewSummary = {
   title: string;
   category: ListingDocument["category"];
   model: ListingDocument["model"];
+  ownerUserId: string;
   ownerName: string;
   ownerPhone: string;
+  ownerRole: UserRole | null;
   ownerType: ListingDocument["ownerType"];
   priceRwf: number;
   units: number;
@@ -82,6 +92,24 @@ export type AdminReviewSummary = {
   submittedAt: string;
   updatedAt: string;
   reviewNote: string | null;
+  internalNoteCount: number;
+  latestInternalNote: {
+    actorName: string;
+    actorRole: UserRole | null;
+    note: string;
+    createdAt: string;
+  } | null;
+  ownerRisk: {
+    totalListingCount: number;
+    activeListingCount: number;
+    rejectedListingCount: number;
+    notConcludedCount: number;
+    dueCommissionCount: number;
+    overdueCommissionCount: number;
+    unpaidPenaltyCount: number;
+    unpaidBalanceRwf: number;
+    riskFlags: string[];
+  };
 };
 
 export type AdminDecisionSummary = {
@@ -163,14 +191,77 @@ function serializeListing(listing: WithId<ListingDocument>): OwnerListingSummary
   };
 }
 
-function serializeAdminReview(listing: WithId<ListingDocument>): AdminReviewSummary {
+function buildOwnerRiskSummary(
+  ownerUserId: string,
+  owner: WithId<UserDocument> | null,
+  ownerListings: WithId<ListingDocument>[],
+  ownerCommissionCases: WithId<CommissionCaseDocument>[],
+  ownerPenalties: WithId<PenaltyDocument>[],
+) {
+  const now = new Date();
+  const activeListingCount = ownerListings.filter((listing) => listing.status === "active").length;
+  const rejectedListingCount = ownerListings.filter((listing) => listing.status === "rejected").length;
+  const notConcludedCount = ownerListings.filter((listing) => listing.status === "not_concluded").length;
+  const dueCommissionCount = ownerCommissionCases.filter((commissionCase) => commissionCase.status === "due").length;
+  const overdueCommissionCount = ownerCommissionCases.filter(
+    (commissionCase) => commissionCase.status === "due" && commissionCase.dueAt.getTime() < now.getTime(),
+  ).length;
+  const unpaidPenaltyEntries = ownerPenalties.filter(
+    (penalty) => resolvePenaltyEffectiveStatus(penalty, now) === "due" || resolvePenaltyEffectiveStatus(penalty, now) === "overdue",
+  );
+  const unpaidPenaltyCount = unpaidPenaltyEntries.length;
+  const unpaidBalanceRwf = unpaidPenaltyEntries.reduce((total, penalty) => total + penalty.penaltyAmountRwf, 0);
+  const riskFlags: string[] = [];
+
+  if (notConcludedCount >= 3) {
+    riskFlags.push("Repeated not concluded outcomes");
+  }
+
+  if (overdueCommissionCount > 0) {
+    riskFlags.push("Overdue commission");
+  }
+
+  if (unpaidPenaltyCount > 0) {
+    riskFlags.push("Unpaid penalties");
+  }
+
+  if (rejectedListingCount >= 3) {
+    riskFlags.push("High rejection count");
+  }
+
+  return {
+    ownerUserId,
+    ownerRole: owner?.role ?? null,
+    totalListingCount: ownerListings.length,
+    activeListingCount,
+    rejectedListingCount,
+    notConcludedCount,
+    dueCommissionCount,
+    overdueCommissionCount,
+    unpaidPenaltyCount,
+    unpaidBalanceRwf,
+    riskFlags,
+  };
+}
+
+function serializeAdminReview(
+  listing: WithId<ListingDocument>,
+  owner: WithId<UserDocument> | null,
+  ownerRisk: AdminReviewSummary["ownerRisk"],
+  internalNoteSummary: {
+    count: number;
+    latest: AdminReviewSummary["latestInternalNote"];
+  },
+): AdminReviewSummary {
   return {
     id: listing._id.toString(),
     title: listing.title,
     category: listing.category,
     model: listing.model,
+    ownerUserId: listing.ownerUserId.toString(),
     ownerName: listing.ownerContact.fullName,
     ownerPhone: listing.ownerContact.phone,
+    ownerRole: owner?.role ?? null,
     ownerType: listing.ownerType,
     priceRwf: listing.priceRwf,
     units: listing.units,
@@ -179,6 +270,9 @@ function serializeAdminReview(listing: WithId<ListingDocument>): AdminReviewSumm
     submittedAt: listing.submittedAt.toISOString(),
     updatedAt: listing.updatedAt.toISOString(),
     reviewNote: listing.reviewNote ?? null,
+    internalNoteCount: internalNoteSummary.count,
+    latestInternalNote: internalNoteSummary.latest,
+    ownerRisk,
   };
 }
 
@@ -234,8 +328,22 @@ function serializeAdminAudit(log: WithId<AuditLogDocument>, actorMap: Map<string
   };
 }
 
+function serializeAdminInternalNote(log: WithId<AuditLogDocument>, actorMap: Map<string, WithId<UserDocument>>) {
+  const actor = log.actorUserId ? actorMap.get(log.actorUserId.toString()) : null;
+  const note = typeof log.metadata?.note === "string" ? log.metadata.note : "No note recorded.";
+
+  return {
+    actorName: actor?.fullName ?? (log.actorUserId ? "Unknown user" : "System"),
+    actorRole: actor?.role ?? null,
+    note,
+    createdAt: log.createdAt.toISOString(),
+  };
+}
+
 export async function saveDraftForSession(session: AuthSession, payload: Record<string, unknown>) {
   const user = await ensureUserRecord(session);
+  await assertNoUnpaidPenaltyBlock(user._id);
+  await assertNoOverdueCommissionBlock(user._id);
   const listingDrafts = await getCollection("listingDrafts");
   const draftId = typeof payload.draftId === "string" ? payload.draftId : "";
   const validation = validateListingDraftInput(payload);
@@ -299,6 +407,8 @@ export async function saveDraftForSession(session: AuthSession, payload: Record<
 
 export async function submitDraftForReview(session: AuthSession, draftId: string) {
   const user = await ensureUserRecord(session);
+  await assertNoUnpaidPenaltyBlock(user._id);
+  await assertNoOverdueCommissionBlock(user._id);
   const listingDrafts = await getCollection("listingDrafts");
   const listings = await getCollection("listings");
   const auditLogs = await getCollection("auditLogs");
@@ -460,6 +570,8 @@ export async function getAdminWorkspaceData(): Promise<AdminWorkspaceData> {
   const listings = await getCollection("listings");
   const auditLogs = await getCollection("auditLogs");
   const users = await getCollection("users");
+  const commissionCases = await getCollection("commissionCases");
+  const penalties = await getCollection("penalties");
   const [reviewQueue, recentDecisions, recentAuditLogs, pendingCount, activeCount, rejectedCount, totalListingCount] =
     await Promise.all([
     listings
@@ -486,18 +598,111 @@ export async function getAdminWorkspaceData(): Promise<AdminWorkspaceData> {
     listings.countDocuments({ status: "rejected" }),
     listings.countDocuments({}),
     ]);
+  const reviewListingIds = reviewQueue.map((listing) => listing._id.toString());
+  const reviewOwnerIds = [...new Set(reviewQueue.map((listing) => listing.ownerUserId.toString()))].map((id) => new ObjectId(id));
+  const internalNotes =
+    reviewListingIds.length > 0
+      ? await auditLogs
+          .find({
+            entityType: "listing",
+            entityId: { $in: reviewListingIds },
+            action: "admin_internal_note_added",
+          })
+          .sort({ createdAt: -1 })
+          .toArray()
+      : [];
   const actorIds = [...new Set(recentAuditLogs.flatMap((log) => (log.actorUserId ? [log.actorUserId.toString()] : [])))].map(
     (id) => new ObjectId(id),
   );
-  const actors =
-    actorIds.length > 0
-      ? await users
+  const internalNoteActorIds = [...new Set(internalNotes.flatMap((log) => (log.actorUserId ? [log.actorUserId.toString()] : [])))].map(
+    (id) => new ObjectId(id),
+  );
+  const userIds = [
+    ...new Set([
+      ...reviewOwnerIds.map((id) => id.toString()),
+      ...actorIds.map((id) => id.toString()),
+      ...internalNoteActorIds.map((id) => id.toString()),
+    ]),
+  ].map((id) => new ObjectId(id));
+  const [userDocuments, ownerListings, ownerCommissionCases, ownerPenalties] = await Promise.all([
+    userIds.length > 0
+      ? users
           .find({
-            _id: { $in: actorIds },
+            _id: { $in: userIds },
           })
           .toArray()
-      : [];
-  const actorMap = new Map(actors.map((actor) => [actor._id.toString(), actor]));
+      : Promise.resolve([]),
+    reviewOwnerIds.length > 0
+      ? listings
+          .find({
+            ownerUserId: { $in: reviewOwnerIds },
+          })
+          .toArray()
+      : Promise.resolve([]),
+    reviewOwnerIds.length > 0
+      ? commissionCases
+          .find({
+            ownerUserId: { $in: reviewOwnerIds },
+          })
+          .toArray()
+      : Promise.resolve([]),
+    reviewOwnerIds.length > 0
+      ? penalties
+          .find({
+            ownerUserId: { $in: reviewOwnerIds },
+          })
+          .toArray()
+      : Promise.resolve([]),
+  ]);
+  const userMap = new Map(userDocuments.map((user) => [user._id.toString(), user]));
+  const actorMap = new Map(actorIds.map((id) => [id.toString(), userMap.get(id.toString())]).filter((entry): entry is [string, WithId<UserDocument>] => Boolean(entry[1])));
+  const ownerListingsMap = new Map<string, WithId<ListingDocument>[]>();
+  const ownerCommissionCasesMap = new Map<string, WithId<CommissionCaseDocument>[]>();
+  const ownerPenaltiesMap = new Map<string, WithId<PenaltyDocument>[]>();
+  const internalNotesMap = new Map<string, WithId<AuditLogDocument>[]>();
+
+  for (const listing of ownerListings) {
+    const key = listing.ownerUserId.toString();
+    const bucket = ownerListingsMap.get(key);
+
+    if (bucket) {
+      bucket.push(listing);
+    } else {
+      ownerListingsMap.set(key, [listing]);
+    }
+  }
+
+  for (const commissionCase of ownerCommissionCases) {
+    const key = commissionCase.ownerUserId.toString();
+    const bucket = ownerCommissionCasesMap.get(key);
+
+    if (bucket) {
+      bucket.push(commissionCase);
+    } else {
+      ownerCommissionCasesMap.set(key, [commissionCase]);
+    }
+  }
+
+  for (const penalty of ownerPenalties) {
+    const key = penalty.ownerUserId.toString();
+    const bucket = ownerPenaltiesMap.get(key);
+
+    if (bucket) {
+      bucket.push(penalty);
+    } else {
+      ownerPenaltiesMap.set(key, [penalty]);
+    }
+  }
+
+  for (const note of internalNotes) {
+    const bucket = internalNotesMap.get(note.entityId);
+
+    if (bucket) {
+      bucket.push(note);
+    } else {
+      internalNotesMap.set(note.entityId, [note]);
+    }
+  }
 
   return {
     stats: {
@@ -506,7 +711,23 @@ export async function getAdminWorkspaceData(): Promise<AdminWorkspaceData> {
       rejectedCount,
       totalListingCount,
     },
-    reviewQueue: reviewQueue.map(serializeAdminReview),
+    reviewQueue: reviewQueue.map((listing) => {
+      const ownerUserId = listing.ownerUserId.toString();
+      const owner = userMap.get(ownerUserId) ?? null;
+      const ownerRisk = buildOwnerRiskSummary(
+        ownerUserId,
+        owner,
+        ownerListingsMap.get(ownerUserId) ?? [],
+        ownerCommissionCasesMap.get(ownerUserId) ?? [],
+        ownerPenaltiesMap.get(ownerUserId) ?? [],
+      );
+      const noteEntries = internalNotesMap.get(listing._id.toString()) ?? [];
+
+      return serializeAdminReview(listing, owner, ownerRisk, {
+        count: noteEntries.length,
+        latest: noteEntries.length > 0 ? serializeAdminInternalNote(noteEntries[0], userMap) : null,
+      });
+    }),
     recentDecisions: recentDecisions.map(serializeAdminDecision),
     recentActivity: recentAuditLogs.map((log) => serializeAdminAudit(log, actorMap)),
   };
@@ -589,6 +810,7 @@ export async function updateListingLifecycleStatus(
   listingId: string,
   nextStatus: ListingStatus,
   statusNote?: string,
+  finalAmountRwf?: number,
 ) {
   const actor = await ensureUserRecord(session);
   const listings = await getCollection("listings");
@@ -616,6 +838,16 @@ export async function updateListingLifecycleStatus(
     throw new Error(`You cannot move a listing from ${humanizeEnum(listing.status)} to ${humanizeEnum(nextStatus)}.`);
   }
 
+  const requiresCommissionCase = listing.model === "A" && (nextStatus === "sold" || nextStatus === "rented");
+  const normalizedFinalAmountRwf =
+    typeof finalAmountRwf === "number" && Number.isInteger(finalAmountRwf) ? finalAmountRwf : undefined;
+
+  if (requiresCommissionCase && (!normalizedFinalAmountRwf || normalizedFinalAmountRwf <= 0)) {
+    throw new Error(`Report the final ${nextStatus === "sold" ? "sale" : "rent"} amount before closing a Model A listing.`);
+  }
+
+  const reportedFinalAmountRwf = requiresCommissionCase ? normalizedFinalAmountRwf! : undefined;
+
   const now = new Date();
   const trimmedStatusNote = statusNote?.trim() || undefined;
   const updatedListing = await listings.findOneAndUpdate(
@@ -638,6 +870,50 @@ export async function updateListingLifecycleStatus(
     throw new Error("Could not update the selected listing status.");
   }
 
+  let commissionCaseId: string | null = null;
+
+  if (requiresCommissionCase) {
+    try {
+      const commissionCase = await createCommissionCaseForListingOutcome({
+        listing: updatedListing,
+        reportedByUserId: actor._id,
+        outcomeStatus: nextStatus,
+        finalAmountRwf: reportedFinalAmountRwf!,
+        statusNote: trimmedStatusNote,
+      });
+      commissionCaseId = commissionCase._id.toString();
+      await publishCommissionCaseCreated({
+        commissionCase,
+        listing: updatedListing,
+        actorUserId: actor._id,
+      });
+    } catch (error) {
+      const reverted = await listings.updateOne(
+        {
+          _id: listingObjectId,
+          ownerUserId: actor._id,
+          status: nextStatus,
+        },
+        {
+          $set: {
+            status: listing.status,
+            updatedAt: new Date(),
+          },
+        },
+      );
+
+      if (reverted.modifiedCount === 0) {
+        throw new Error(
+          `The listing outcome could not be finalized cleanly after commission generation failed. Please contact admin support. ${
+            error instanceof Error ? error.message : ""
+          }`.trim(),
+        );
+      }
+
+      throw error;
+    }
+  }
+
   await auditLogs.insertOne({
     actorUserId: actor._id,
     entityType: "listing",
@@ -647,6 +923,8 @@ export async function updateListingLifecycleStatus(
       previousStatus: listing.status,
       nextStatus,
       statusNote: trimmedStatusNote,
+      finalAmountRwf: reportedFinalAmountRwf,
+      commissionCaseId,
     },
     createdAt: now,
     updatedAt: now,
@@ -656,7 +934,10 @@ export async function updateListingLifecycleStatus(
     kind: "listing_status_changed",
     severity: nextStatus === "active" ? "success" : "warning",
     title: "Listing lifecycle updated",
-    body: `${updatedListing.title} moved from ${humanizeEnum(listing.status)} to ${humanizeEnum(nextStatus)}.`,
+    body:
+      commissionCaseId && reportedFinalAmountRwf
+        ? `${updatedListing.title} moved from ${humanizeEnum(listing.status)} to ${humanizeEnum(nextStatus)} and generated a commission invoice from ${reportedFinalAmountRwf.toLocaleString("en-RW")} RWF.`
+        : `${updatedListing.title} moved from ${humanizeEnum(listing.status)} to ${humanizeEnum(nextStatus)}.`,
     entityType: "listing",
     entityId: listingId,
     link: "/admin#notifications",
@@ -688,5 +969,6 @@ export async function updateListingLifecycleStatus(
     listingId,
     previousStatus: listing.status,
     status: updatedListing.status,
+    commissionCaseId,
   };
 }

@@ -19,10 +19,20 @@ The app already has:
 - admin-configurable listing token fees and seeker pricing flowing through shared settings
 - payment records, pending unlock and seeker-post checkout intents, provider-ready settlement routes, and admin-side manual payment reconciliation flowing through a shared payment workflow
 - payment transition audit logs, shared AfrIPay callback/webhook validation, an admin payment operations feed, and the legacy AfrIPay form-post handoff contract
+- focused payment regression tests for AfrIPay status mapping, signal extraction, and webhook-secret validation
 - buyer-side pending checkout visibility, seeker-post draft persistence, and return-state messaging on detail pages and the seeker-post flow
 - automatic Mongo index bootstrap and Mongo-backed throttling across sign-in and the main write surface
 - shared request-body parsing and route-level validation helpers across the core write routes
 - notification infrastructure across review, unlock, inquiry, and seeker flows
+- support tooling for audit filtering and CSV export from the admin workspace
+- query-backed payment explorer filters, matching transition events, and CSV export from the admin workspace
+- Model A commission workflow, overdue tracking, owner-side listing blocks, and admin commission reconciliation
+- penalty generation for overdue commission, unpaid-penalty gating, owner/admin penalty ledgers, and admin-side penalty adjustment or reconciliation
+- owner-history and risk-signal summaries directly inside the admin review queue
+- admin-only internal investigation notes directly from pending review cards
+- investigation-case intake and resolution tooling from listing, payment, commission, and penalty admin surfaces
+- structured verification follow-up logs inside investigation cases, including contact target, method, outcome, and timeline history
+- query-backed investigation explorer filters and CSV export from the admin workspace
 
 The largest remaining gaps are not page count. They are production reliability, payment correctness, operational tooling, and workflow completion.
 
@@ -39,7 +49,7 @@ The largest remaining gaps are not page count. They are production reliability, 
    Scope: event-driven notifications, unread counts in the shell, notification centers in dashboard and admin.
 4. Phase 4: Workflow completion
    Status: in progress
-   Scope: listing lifecycle updates, seeker response workflow, seeker closure outcomes, post-unlock messaging, and matched follow-up threads.
+   Scope: listing lifecycle updates, commission workflow, seeker response workflow, seeker closure outcomes, post-unlock messaging, and matched follow-up threads.
 5. Phase 5: Launch hardening
    Status: in progress
    Scope: AfrIPay callbacks/webhooks, auth hardening, rate limiting, exports, penalties, and production safety.
@@ -75,7 +85,7 @@ These items make the product manageable once users and transactions grow.
 2. Admin analytics for listings, unlocks, seeker demand, and payments.
 3. Payment ledger filters and export paths.
 4. Audit-log explorer for support and dispute handling.
-5. Manual review tools for suspicious unlock or messaging behavior.
+5. Manual review tools for suspicious unlock, listing, or messaging behavior.
 
 ## Priority 3: Product Polish
 
@@ -92,7 +102,7 @@ These items improve trust, usability, and maintainability across the app.
 
 These items reduce future bugs and speed up safe iteration.
 
-1. Add a `verify` script that runs the standard quality gate.
+1. Keep extending the `verify` script so payment-sensitive tests grow with the gateway surface.
 2. Add focused integration tests for auth, unlock, and payment-sensitive flows.
 3. Add seed data for local demos.
 4. Extract duplicated formatting and display logic into shared helpers.
@@ -102,13 +112,13 @@ These items reduce future bugs and speed up safe iteration.
 
 1. Live AfrIPay adapter on top of the new payment intent/state model
 2. Listing lifecycle and commission states
-3. Penalties and admin fee controls
-4. Analytics, exports, and support tooling
+3. Penalties and unpaid-balance enforcement on top of admin fee controls
+4. Investigation-case workflows and support resolution tooling on top of the new owner risk signals
 5. Final public-site polish and launch hardening
 
 ## Current Tranche
 
-This tranche focuses on workflow completion across listing and seeker demand flows:
+This tranche now also covers the owner-side post-deal commission flow:
 
 - owner-side listing lifecycle transitions
 - audit and notification fan-out for lifecycle changes
@@ -122,4 +132,11 @@ This tranche focuses on workflow completion across listing and seeker demand flo
 - pending checkout intents and mock hosted payment confirmation for listing unlocks, seeker unlocks, and seeker-post publishing
 - dashboard and detail-page UI polish for continuing checkout and understanding payment return states
 - payment transition visibility for admins, safer AfrIPay callback/webhook parsing, legacy form-post gateway handoff, and admin manual reconciliation
+- Model A commission case creation on sold or rented outcomes, dashboard visibility for owners, overdue blocking on new listing creation, and admin reconciliation controls
+- automatic penalty generation for overdue commission cases, unpaid-penalty blocking, owner/admin penalty ledgers, and admin amount adjustment or reconciliation
+- owner-history and unresolved-balance risk signals embedded in the admin review queue
+- private admin investigation notes embedded in the pending review workflow
+- investigation-case creation and lifecycle management from listing reviews, payment records, commission cases, and penalty cases
+- verification follow-up timelines inside investigation cases so admins can log owner, buyer, provider, or internal review outcomes
+- investigation explorer filters and export so support can work large queues without losing the timeline context
 - updated phase tracking for workflow completion

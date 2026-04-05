@@ -6,9 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "test:payments": "node --import tsx --test src/lib/payments/afripay-signal.test.ts",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "verify": "npm run lint && npm run build"
+    "verify": "npm run test:payments && npm run lint && npm run build"
   },
   "dependencies": {
     "cloudinary": "^2.9.0",
@@ -26,6 +27,7 @@
     "eslint": "^9.39.4",
     "eslint-config-next": "^16.2.1",
     "tailwindcss": "^4.2.2",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }
 }

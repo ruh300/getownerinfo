@@ -63,6 +63,59 @@ export type PaymentPurpose = (typeof paymentPurposes)[number];
 export const paymentStatuses = ["pending", "paid", "failed", "cancelled"] as const;
 export type PaymentStatus = (typeof paymentStatuses)[number];
 
+export const commissionCaseStatuses = ["due", "paid", "waived"] as const;
+export type CommissionCaseStatus = (typeof commissionCaseStatuses)[number];
+
+export const penaltyStatuses = ["due", "paid", "waived"] as const;
+export type PenaltyStatus = (typeof penaltyStatuses)[number];
+
+export const penaltyOffenseTypes = [
+  "commission_overdue",
+  "commission_misreporting",
+  "false_not_concluded",
+  "listing_misrepresentation",
+  "manual_admin",
+] as const;
+export type PenaltyOffenseType = (typeof penaltyOffenseTypes)[number];
+
+export const investigationCaseTypes = [
+  "document_verification",
+  "deal_verification",
+  "suspicious_activity",
+  "payment_dispute",
+  "manual_review",
+] as const;
+export type InvestigationCaseType = (typeof investigationCaseTypes)[number];
+
+export const investigationCasePriorities = ["low", "medium", "high", "urgent"] as const;
+export type InvestigationCasePriority = (typeof investigationCasePriorities)[number];
+
+export const investigationCaseStatuses = ["open", "investigating", "resolved", "dismissed"] as const;
+export type InvestigationCaseStatus = (typeof investigationCaseStatuses)[number];
+
+export const investigationUpdateTargets = ["owner", "buyer", "payment_provider", "internal"] as const;
+export type InvestigationUpdateTarget = (typeof investigationUpdateTargets)[number];
+
+export const investigationUpdateChannels = [
+  "phone",
+  "email",
+  "whatsapp",
+  "document_review",
+  "payment_gateway",
+  "internal_review",
+] as const;
+export type InvestigationUpdateChannel = (typeof investigationUpdateChannels)[number];
+
+export const investigationUpdateOutcomes = [
+  "pending_response",
+  "confirmed",
+  "disputed",
+  "no_response",
+  "needs_follow_up",
+  "cleared",
+] as const;
+export type InvestigationUpdateOutcome = (typeof investigationUpdateOutcomes)[number];
+
 export const rateLimitScopes = ["ip", "session"] as const;
 export type RateLimitScope = (typeof rateLimitScopes)[number];
 
@@ -81,6 +134,13 @@ export const notificationKinds = [
   "seeker_request_closed",
   "seeker_match_message_received",
   "payment_status_changed",
+  "commission_case_created",
+  "commission_case_paid",
+  "commission_case_waived",
+  "penalty_created",
+  "penalty_adjusted",
+  "penalty_paid",
+  "penalty_waived",
 ] as const;
 export type NotificationKind = (typeof notificationKinds)[number];
 
@@ -249,6 +309,75 @@ export type RateLimitBucketDocument = BaseDocument & {
   lastSeenAt: Date;
 };
 
+export type CommissionCaseDocument = BaseDocument & {
+  listingId: ObjectId;
+  ownerUserId: ObjectId;
+  category: ListingCategory;
+  listingModel: ListingModel;
+  outcomeStatus: Extract<ListingStatus, "sold" | "rented">;
+  finalAmountRwf: number;
+  commissionAmountRwf: number;
+  saleCommissionRateBps?: number;
+  rentalCommissionMonthsEquivalent?: number;
+  dueDays: number;
+  status: CommissionCaseStatus;
+  reportedByUserId: ObjectId;
+  statusNote?: string;
+  dueAt: Date;
+  settledAt?: Date;
+  settlementPaymentReference?: string;
+};
+
+export type PenaltyDocument = BaseDocument & {
+  ownerUserId: ObjectId;
+  listingId?: ObjectId;
+  commissionCaseId?: ObjectId;
+  offenseType: PenaltyOffenseType;
+  reason: string;
+  sourceEntityType: "listing" | "commission_case" | "payment" | "user";
+  sourceEntityId: string;
+  baseAmountRwf: number;
+  penaltyAmountRwf: number;
+  percentageBps: number;
+  fixedAmountRwf: number;
+  status: PenaltyStatus;
+  dueAt: Date;
+  assessedAt: Date;
+  assessedByUserId?: ObjectId;
+  statusNote?: string;
+  settledAt?: Date;
+  settlementPaymentReference?: string;
+};
+
+export type InvestigationCaseDocument = BaseDocument & {
+  entityType: "listing" | "commission_case" | "penalty" | "payment" | "user";
+  entityId: string;
+  caseType: InvestigationCaseType;
+  priority: InvestigationCasePriority;
+  status: InvestigationCaseStatus;
+  title: string;
+  summary: string;
+  subjectUserId?: ObjectId;
+  linkedListingId?: ObjectId;
+  linkedCommissionCaseId?: ObjectId;
+  linkedPenaltyId?: ObjectId;
+  linkedPaymentReference?: string;
+  createdByUserId: ObjectId;
+  updatedByUserId: ObjectId;
+  resolutionNote?: string;
+  resolvedAt?: Date;
+};
+
+export type InvestigationUpdateDocument = BaseDocument & {
+  caseId: ObjectId;
+  authorUserId: ObjectId;
+  target: InvestigationUpdateTarget;
+  channel: InvestigationUpdateChannel;
+  outcome: InvestigationUpdateOutcome;
+  note: string;
+  caseStatusAfter: InvestigationCaseStatus;
+};
+
 export type SeekerRequestDocument = BaseDocument & {
   requesterUserId: ObjectId;
   category: ListingCategory;
@@ -332,6 +461,8 @@ export type AuditLogDocument = BaseDocument & {
   entityType:
     | "listing"
     | "payment"
+    | "commission_case"
+    | "investigation_case"
     | "token_unlock"
     | "penalty"
     | "user"
@@ -363,4 +494,10 @@ export type FeeSettingsDocument = BaseDocument & {
   listingTokenFeeMatrix: ListingTokenFeeMatrix;
   seekerPostFeeByDuration: SeekerPostFeeByDuration;
   seekerViewTokenFeeRwf: number;
+  saleCommissionRateBpsByCategory: Record<ListingCategory, number>;
+  rentalCommissionMonthsEquivalent: number;
+  commissionDueDays: number;
+  penaltyPercentageBps: number;
+  penaltyFixedAmountRwf: number;
+  penaltyDueDays: number;
 };

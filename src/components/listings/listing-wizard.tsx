@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useDeferredValue, useEffect, useState } from "react";
 
 import { type AuthUser } from "@/lib/auth/types";
+import type { CommissionGuardData } from "@/lib/commissions/workflow";
+import type { PenaltyGuardData } from "@/lib/penalties/workflow";
 import {
   type ListingCategory,
   type ListingMedia,
@@ -131,9 +133,13 @@ function normalizeMedia(media: ListingMedia[]) {
 export function ListingWizard({
   signedInUser,
   feeSettings,
+  commissionGuard,
+  penaltyGuard,
 }: {
   signedInUser: AuthUser;
   feeSettings: FeeSettingsSummary;
+  commissionGuard: CommissionGuardData;
+  penaltyGuard: PenaltyGuardData;
 }) {
   const [category, setCategory] = useState<ListingCategory>("real_estate_rent");
   const [ownerType, setOwnerType] = useState<OwnerType>("owner");
@@ -456,6 +462,16 @@ export function ListingWizard({
   }
 
   async function saveDraftToServer(showSuccessMessage = true) {
+    if (isBlockedByPenalty) {
+      setDraftError("You have an unpaid penalty. Please resolve it to continue using the platform.");
+      return null;
+    }
+
+    if (isBlockedByCommission) {
+      setDraftError("Your commission payment is overdue. New listings are paused until this is resolved.");
+      return null;
+    }
+
     setDraftMessage(null);
     setDraftError(null);
     setIsSavingDraft(true);
@@ -500,6 +516,16 @@ export function ListingWizard({
   }
 
   async function submitForReview() {
+    if (isBlockedByPenalty) {
+      setDraftError("You have an unpaid penalty. Please resolve it to continue using the platform.");
+      return;
+    }
+
+    if (isBlockedByCommission) {
+      setDraftError("Your commission payment is overdue. New listings are paused until this is resolved.");
+      return;
+    }
+
     if (!isFormReady()) {
       setDraftError("Finish the required listing details before submitting for review.");
       return;
@@ -538,6 +564,9 @@ export function ListingWizard({
   const selectedCategoryLabel = categoryOptions.find((option) => option.value === category)?.label ?? category;
   const currentTokenFeeRwf = feeSettings.listingTokenFeeMatrix[category][summaryModel];
   const isBusy = isSavingDraft || isSubmittingDraft;
+  const isBlockedByCommission = commissionGuard.blocked;
+  const isBlockedByPenalty = penaltyGuard.blocked;
+  const isBlockedFromListing = isBlockedByPenalty || isBlockedByCommission;
   const completenessItems = [
     { label: "Owner details", done: fullName.trim().length > 1 && phone.trim().length > 5 },
     { label: "Location", done: approximateAreaLabel.trim().length > 1 },
@@ -559,6 +588,18 @@ export function ListingWizard({
           <p className="max-w-3xl text-base leading-7 text-[var(--muted)]">
             This draft flow now supports pricing rules, browser autosave, listing image uploads, and an admin-only ownership proof upload.
           </p>
+          {isBlockedByPenalty ? (
+            <div className="max-w-3xl rounded-[20px] border border-[rgba(184,50,50,0.2)] bg-[rgba(184,50,50,0.08)] px-4 py-3 text-sm leading-6 text-[#9c2d2d]">
+              You have an unpaid penalty. New listings are paused until this is resolved. Current unpaid penalty balance:{" "}
+              <span className="font-semibold">{formatRwf(penaltyGuard.unpaidAmountRwf)}</span>.
+            </div>
+          ) : null}
+          {!isBlockedByPenalty && isBlockedByCommission ? (
+            <div className="max-w-3xl rounded-[20px] border border-[rgba(184,50,50,0.2)] bg-[rgba(184,50,50,0.08)] px-4 py-3 text-sm leading-6 text-[#9c2d2d]">
+              Your commission payment is overdue. New listings are paused until this is resolved. Outstanding overdue balance:{" "}
+              <span className="font-semibold">{formatRwf(commissionGuard.overdueAmountRwf)}</span>.
+            </div>
+          ) : null}
           <div className="inline-flex rounded-full border border-[rgba(26,77,46,0.14)] bg-[var(--surface-alt)] px-4 py-2 text-sm font-medium text-[var(--primary)]">
             Signed in as {signedInUser.fullName} ({signedInUser.role})
           </div>
@@ -755,8 +796,8 @@ export function ListingWizard({
               <div className="rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-xs leading-5 text-[var(--muted)]">
                 {savedDraftId ? `Server draft linked: ${savedDraftId}` : "No server draft linked yet. Save once to create the persistent draft record."}
               </div>
-              <button type="button" disabled={!isFormReady() || isBusy} onClick={saveDraft} className={`w-full rounded-2xl px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-white transition ${!isFormReady() || isBusy ? "cursor-not-allowed bg-[rgba(26,77,46,0.45)]" : "bg-[var(--primary)] hover:bg-[var(--primary-light)]"}`}>{isSavingDraft ? "Saving draft..." : "Save draft"}</button>
-              <button type="button" disabled={!isFormReady() || isBusy} onClick={() => { void submitForReview(); }} className={`w-full rounded-2xl px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-white transition ${!isFormReady() || isBusy ? "cursor-not-allowed bg-[rgba(200,134,10,0.45)]" : "bg-[var(--accent)] hover:bg-[#a06b08]"}`}>{isSubmittingDraft ? "Submitting for review..." : "Submit for review"}</button>
+              <button type="button" disabled={!isFormReady() || isBusy || isBlockedFromListing} onClick={saveDraft} className={`w-full rounded-2xl px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-white transition ${!isFormReady() || isBusy || isBlockedFromListing ? "cursor-not-allowed bg-[rgba(26,77,46,0.45)]" : "bg-[var(--primary)] hover:bg-[var(--primary-light)]"}`}>{isSavingDraft ? "Saving draft..." : "Save draft"}</button>
+              <button type="button" disabled={!isFormReady() || isBusy || isBlockedFromListing} onClick={() => { void submitForReview(); }} className={`w-full rounded-2xl px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-white transition ${!isFormReady() || isBusy || isBlockedFromListing ? "cursor-not-allowed bg-[rgba(200,134,10,0.45)]" : "bg-[var(--accent)] hover:bg-[#a06b08]"}`}>{isSubmittingDraft ? "Submitting for review..." : "Submit for review"}</button>
               <p className="text-xs leading-5 text-[var(--muted)]">Browser autosave is active. Persistent save and admin submission now use the same server-side draft record.</p>
               {draftMessage ? <div className="rounded-2xl border border-[rgba(26,122,74,0.24)] bg-[rgba(26,122,74,0.08)] px-4 py-3 text-sm text-[var(--primary)]">{draftMessage}</div> : null}
               {draftError ? <div className="rounded-2xl border border-[rgba(184,50,50,0.2)] bg-[rgba(184,50,50,0.08)] px-4 py-3 text-sm text-[#9c2d2d]">{draftError}</div> : null}

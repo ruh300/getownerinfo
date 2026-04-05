@@ -97,6 +97,12 @@ export async function POST(request: NextRequest) {
       metadata: {
         seekerViewTokenFeeRwf: settings.seekerViewTokenFeeRwf,
         seekerPostFeeByDuration: settings.seekerPostFeeByDuration,
+        saleCommissionRateBpsByCategory: settings.saleCommissionRateBpsByCategory,
+        rentalCommissionMonthsEquivalent: settings.rentalCommissionMonthsEquivalent,
+        commissionDueDays: settings.commissionDueDays,
+        penaltyPercentageBps: settings.penaltyPercentageBps,
+        penaltyFixedAmountRwf: settings.penaltyFixedAmountRwf,
+        penaltyDueDays: settings.penaltyDueDays,
       },
       createdAt: now,
       updatedAt: now,

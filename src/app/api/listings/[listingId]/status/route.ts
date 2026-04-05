@@ -4,6 +4,7 @@ import { getCurrentSession } from "@/lib/auth/session";
 import { canCreateListings } from "@/lib/auth/types";
 import { listingStatuses, type ListingStatus } from "@/lib/domain";
 import {
+  getOptionalNumber,
   getOptionalTrimmedString,
   getRouteErrorResponse,
   readJsonObjectBody,
@@ -20,6 +21,7 @@ import {
 type StatusBody = {
   status?: unknown;
   statusNote?: unknown;
+  finalAmountRwf?: unknown;
 };
 
 function parseListingStatus(value: unknown): ListingStatus | null {
@@ -79,14 +81,16 @@ export async function POST(
     }
 
     const statusNote = getOptionalTrimmedString(body as Record<string, unknown>, "statusNote");
+    const finalAmountRwf = getOptionalNumber(body as Record<string, unknown>, "finalAmountRwf");
     const { listingId } = await context.params;
-    const result = await updateListingLifecycleStatus(session, listingId, nextStatus, statusNote);
+    const result = await updateListingLifecycleStatus(session, listingId, nextStatus, statusNote, finalAmountRwf);
 
     const response = NextResponse.json({
       status: "ok",
       listingId: result.listingId,
       previousStatus: result.previousStatus,
       listingStatus: result.status,
+      commissionCaseId: result.commissionCaseId,
     });
 
     return applyRateLimitHeaders(response, rateLimit);

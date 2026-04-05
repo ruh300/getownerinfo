@@ -44,6 +44,7 @@ export type CreatePaymentRecordInput = {
   referencePrefix?: string;
   relatedEntityId?: string;
   returnPath?: string;
+  auditActorUserId?: ObjectId;
 };
 
 export type CreatePaymentIntentInput = {
@@ -911,7 +912,7 @@ export async function createPaymentRecord(input: CreatePaymentRecordInput) {
   };
 
   await createPaymentAuditLog({
-    actorUserId: input.userId,
+    actorUserId: input.auditActorUserId ?? input.userId,
     action: "payment_record_created",
       payment,
       createdAt: now,

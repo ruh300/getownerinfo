@@ -1,32 +1,98 @@
 import Link from "next/link";
 
 import { OwnerConversationInbox } from "@/components/chat/owner-conversation-inbox";
+import { OwnerCommissionLedger } from "@/components/commissions/owner-commission-ledger";
 import { ListingStatusManager } from "@/components/listings/listing-status-manager";
 import { NotificationCenter } from "@/components/notifications/notification-center";
 import { PendingPaymentList } from "@/components/payments/pending-payment-list";
+import { OwnerPenaltyLedger } from "@/components/penalties/owner-penalty-ledger";
 import { SeekerMatchConversationList } from "@/components/seeker-requests/seeker-match-conversation-list";
 import { SeekerResponseList } from "@/components/seeker-requests/seeker-response-list";
 import { requireSession } from "@/lib/auth/session";
 import { canAccessAdmin, canCreateListings } from "@/lib/auth/types";
+import { ensureUserRecord } from "@/lib/auth/user-record";
+import {
+  getCommissionGuardDataForOwner,
+  getOwnerCommissionOverviewData,
+} from "@/lib/commissions/workflow";
 import { getBuyerWorkspaceData } from "@/lib/dashboard/workspace";
 import { formatRwf } from "@/lib/formatting/currency";
 import { formatDate, formatDateTime } from "@/lib/formatting/date";
 import { getCategoryLabel, humanizeEnum } from "@/lib/formatting/text";
 import { getOwnerWorkspaceData } from "@/lib/listings/workflow";
 import { getNotificationCenterForSession } from "@/lib/notifications/workflow";
+import { getOwnerPenaltyOverviewData, getPenaltyGuardDataForOwner } from "@/lib/penalties/workflow";
 
 export default async function DashboardPage() {
   const session = await requireSession();
   const showOwnerWorkspace = canCreateListings(session.user.role);
   let ownerWorkspace: Awaited<ReturnType<typeof getOwnerWorkspaceData>> | null = null;
+  let ownerCommissionOverview: Awaited<ReturnType<typeof getOwnerCommissionOverviewData>> | null = null;
+  let ownerCommissionGuard: Awaited<ReturnType<typeof getCommissionGuardDataForOwner>> | null = null;
+  let ownerPenaltyOverview: Awaited<ReturnType<typeof getOwnerPenaltyOverviewData>> | null = null;
+  let ownerPenaltyGuard: Awaited<ReturnType<typeof getPenaltyGuardDataForOwner>> | null = null;
   let buyerWorkspace: Awaited<ReturnType<typeof getBuyerWorkspaceData>> | null = null;
   let notificationCenter: Awaited<ReturnType<typeof getNotificationCenterForSession>> | null = null;
   let workspaceError: string | null = null;
+  let commissionError: string | null = null;
+  let penaltyError: string | null = null;
   let notificationError: string | null = null;
 
   if (showOwnerWorkspace) {
     try {
-      ownerWorkspace = await getOwnerWorkspaceData(session);
+      const owner = await ensureUserRecord(session);
+      const [ownerWorkspaceResult, commissionOverviewResult, commissionGuardResult, penaltyOverviewResult, penaltyGuardResult] = await Promise.allSettled([
+        getOwnerWorkspaceData(session),
+        getOwnerCommissionOverviewData(owner._id),
+        getCommissionGuardDataForOwner(owner._id),
+        getOwnerPenaltyOverviewData(owner._id),
+        getPenaltyGuardDataForOwner(owner._id),
+      ]);
+
+      if (ownerWorkspaceResult.status === "fulfilled") {
+        ownerWorkspace = ownerWorkspaceResult.value;
+      } else {
+        workspaceError =
+          ownerWorkspaceResult.reason instanceof Error
+            ? ownerWorkspaceResult.reason.message
+            : "Could not load your workspace data.";
+      }
+
+      if (commissionOverviewResult.status === "fulfilled") {
+        ownerCommissionOverview = commissionOverviewResult.value;
+      } else {
+        commissionError =
+          commissionOverviewResult.reason instanceof Error
+            ? commissionOverviewResult.reason.message
+            : "Could not load your commission ledger.";
+      }
+
+      if (commissionGuardResult.status === "fulfilled") {
+        ownerCommissionGuard = commissionGuardResult.value;
+      } else if (!commissionError) {
+        commissionError =
+          commissionGuardResult.reason instanceof Error
+            ? commissionGuardResult.reason.message
+            : "Could not load your commission guard state.";
+      }
+
+      if (penaltyOverviewResult.status === "fulfilled") {
+        ownerPenaltyOverview = penaltyOverviewResult.value;
+      } else {
+        penaltyError =
+          penaltyOverviewResult.reason instanceof Error
+            ? penaltyOverviewResult.reason.message
+            : "Could not load your penalty ledger.";
+      }
+
+      if (penaltyGuardResult.status === "fulfilled") {
+        ownerPenaltyGuard = penaltyGuardResult.value;
+      } else if (!penaltyError) {
+        penaltyError =
+          penaltyGuardResult.reason instanceof Error
+            ? penaltyGuardResult.reason.message
+            : "Could not load your penalty guard state.";
+      }
     } catch (error) {
       workspaceError = error instanceof Error ? error.message : "Could not load your workspace data.";
     }
@@ -154,6 +220,18 @@ export default async function DashboardPage() {
       {notificationError ? (
         <section className="rounded-[24px] border border-[rgba(184,50,50,0.2)] bg-[rgba(184,50,50,0.08)] px-5 py-4 text-sm leading-6 text-[#9c2d2d]">
           Could not load notifications: {notificationError}
+        </section>
+      ) : null}
+
+      {commissionError ? (
+        <section className="rounded-[24px] border border-[rgba(184,50,50,0.2)] bg-[rgba(184,50,50,0.08)] px-5 py-4 text-sm leading-6 text-[#9c2d2d]">
+          Could not load commission data: {commissionError}
+        </section>
+      ) : null}
+
+      {penaltyError ? (
+        <section className="rounded-[24px] border border-[rgba(184,50,50,0.2)] bg-[rgba(184,50,50,0.08)] px-5 py-4 text-sm leading-6 text-[#9c2d2d]">
+          Could not load penalty data: {penaltyError}
         </section>
       ) : null}
 
@@ -297,6 +375,14 @@ export default async function DashboardPage() {
               )}
             </section>
           </section>
+
+          {ownerCommissionOverview && ownerCommissionGuard ? (
+            <OwnerCommissionLedger overview={ownerCommissionOverview} guard={ownerCommissionGuard} />
+          ) : null}
+
+          {ownerPenaltyOverview && ownerPenaltyGuard ? (
+            <OwnerPenaltyLedger overview={ownerPenaltyOverview} guard={ownerPenaltyGuard} />
+          ) : null}
 
           <section className="space-y-4">
             <div className="flex items-center justify-between gap-3">

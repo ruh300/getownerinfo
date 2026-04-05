@@ -19,8 +19,10 @@ export function ListingStatusManager({ listingId, currentStatus }: ListingStatus
     nextStatuses[0] ?? "",
   );
   const [statusNote, setStatusNote] = useState("");
+  const [finalAmountRwf, setFinalAmountRwf] = useState("");
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const needsFinalAmount = selectedStatus === "sold" || selectedStatus === "rented";
 
   if (nextStatuses.length === 0) {
     return (
@@ -36,6 +38,15 @@ export function ListingStatusManager({ listingId, currentStatus }: ListingStatus
       return;
     }
 
+    if (needsFinalAmount) {
+      const parsedFinalAmount = Number.parseInt(finalAmountRwf, 10);
+
+      if (!Number.isInteger(parsedFinalAmount) || parsedFinalAmount <= 0) {
+        setError(`Enter the final ${selectedStatus === "sold" ? "sale" : "rent"} amount before continuing.`);
+        return;
+      }
+    }
+
     setError(null);
     setIsPending(true);
 
@@ -48,6 +59,7 @@ export function ListingStatusManager({ listingId, currentStatus }: ListingStatus
         body: JSON.stringify({
           status: selectedStatus,
           statusNote,
+          finalAmountRwf: needsFinalAmount ? Number.parseInt(finalAmountRwf, 10) : undefined,
         }),
       });
       const payload = (await response.json()) as { message?: string };
@@ -60,6 +72,7 @@ export function ListingStatusManager({ listingId, currentStatus }: ListingStatus
         router.refresh();
       });
       setStatusNote("");
+      setFinalAmountRwf("");
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Could not update the listing lifecycle.");
     } finally {
@@ -79,7 +92,14 @@ export function ListingStatusManager({ listingId, currentStatus }: ListingStatus
         Next status
         <select
           value={selectedStatus}
-          onChange={(event) => setSelectedStatus(event.target.value as ListingStatus)}
+          onChange={(event) => {
+            const nextValue = event.target.value as ListingStatus;
+            setSelectedStatus(nextValue);
+
+            if (nextValue !== "sold" && nextValue !== "rented") {
+              setFinalAmountRwf("");
+            }
+          }}
           className="mt-2 w-full rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm outline-none transition focus:border-[var(--primary)]"
         >
           {nextStatuses.map((status) => (
@@ -89,6 +109,22 @@ export function ListingStatusManager({ listingId, currentStatus }: ListingStatus
           ))}
         </select>
       </label>
+      {needsFinalAmount ? (
+        <label className="block text-sm font-semibold text-[var(--foreground)]">
+          Final {selectedStatus === "sold" ? "sale" : "rent"} amount
+          <input
+            type="number"
+            min="1"
+            value={finalAmountRwf}
+            onChange={(event) => setFinalAmountRwf(event.target.value)}
+            className="mt-2 w-full rounded-2xl border border-[var(--border)] bg-white px-4 py-3 text-sm outline-none transition focus:border-[var(--primary)]"
+            placeholder="Enter the final amount in Rwf"
+          />
+          <span className="mt-2 block text-xs font-normal leading-5 text-[var(--muted)]">
+            Model A outcomes generate a system commission invoice from this reported amount.
+          </span>
+        </label>
+      ) : null}
       <label className="block text-sm font-semibold text-[var(--foreground)]">
         Optional note
         <textarea
