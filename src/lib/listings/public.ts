@@ -108,9 +108,11 @@ function serializeListingDetail(
 export async function getPublicListings({
   query,
   category,
+  limit = 24,
 }: {
   query?: string;
   category?: string;
+  limit?: number;
 }) {
   const listings = await getCollection("listings");
   const feeSettings = await getFeeSettingsSummary();
@@ -136,7 +138,7 @@ export async function getPublicListings({
   const results = await listings
     .find(filter)
     .sort({ updatedAt: -1 })
-    .limit(24)
+    .limit(Math.max(1, Math.min(limit, 48)))
     .toArray();
 
   return results.map((listing) => serializeListingSummary(listing, feeSettings));

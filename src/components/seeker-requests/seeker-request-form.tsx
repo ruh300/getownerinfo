@@ -321,8 +321,8 @@ export function SeekerRequestForm({ feeSettings }: { feeSettings: FeeSettingsSum
         </label>
       </div>
 
-      <div className="rounded-[24px] border border-[rgba(26,77,46,0.12)] bg-[rgba(26,77,46,0.06)] p-5 text-sm leading-6 text-[var(--muted)]">
-        <p className="font-semibold text-[var(--foreground)]">Prototype seeker pricing</p>
+      <div className="rounded-[24px] border border-[rgba(0,104,74,0.12)] bg-[rgba(0,237,100,0.06)] p-5 text-sm leading-6 text-[var(--muted)]">
+        <p className="font-semibold text-[var(--foreground)]">Request pricing</p>
         <p className="mt-2">Posting fee for this request: {formatRwf(postFeeRwf)}</p>
         <p>Future owner view token: {formatRwf(feeSettings.seekerViewTokenFeeRwf)}</p>
         <p className="mt-2">
@@ -350,7 +350,7 @@ export function SeekerRequestForm({ feeSettings }: { feeSettings: FeeSettingsSum
         type="submit"
         disabled={isPending}
         className={`w-full rounded-2xl px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-white transition ${
-          isPending ? "cursor-not-allowed bg-[rgba(26,77,46,0.45)]" : "bg-[var(--primary)] hover:bg-[var(--primary-light)]"
+          isPending ? "cursor-not-allowed bg-[rgba(0,104,74,0.45)]" : "bg-[var(--primary)] hover:bg-[var(--primary-light)] hover:text-[#00130d]"
         }`}
       >
         {isPending ? "Posting request..." : "Post seeker request"}

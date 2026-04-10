@@ -355,9 +355,11 @@ export async function getBuyerSeekerRequestsForSession(session: AuthSession): Pr
 export async function getPublicSeekerRequests({
   query,
   category,
+  limit = 24,
 }: {
   query?: string;
   category?: string;
+  limit?: number;
 }): Promise<PublicSeekerRequestSummary[]> {
   const seekerRequests = await getCollection("seekerRequests");
   const normalizedQuery = query?.trim();
@@ -381,7 +383,11 @@ export async function getPublicSeekerRequests({
     ];
   }
 
-  const requests = await seekerRequests.find(filter).sort({ createdAt: -1 }).limit(24).toArray();
+  const requests = await seekerRequests
+    .find(filter)
+    .sort({ createdAt: -1 })
+    .limit(Math.max(1, Math.min(limit, 48)))
+    .toArray();
 
   return requests.map(serializePublicRequest);
 }

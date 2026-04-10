@@ -82,10 +82,12 @@ export function SignInForm({ nextPath }: { nextPath: string }) {
               type="button"
               onClick={() => setRole(option.role)}
               className={`rounded-[24px] border p-4 text-left transition ${
-                active ? "border-[var(--primary)] bg-[rgba(26,77,46,0.08)]" : "border-[var(--border)] bg-white"
+                active
+                  ? "border-[var(--primary)] bg-[rgba(0,237,100,0.08)] shadow-[0_12px_32px_rgba(0,30,43,0.08)]"
+                  : "border-[var(--border)] bg-white"
               }`}
             >
-              <p className="font-semibold text-[var(--foreground)]">{option.label}</p>
+              <p className="eyebrow text-[var(--primary)]">{option.label}</p>
               <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{option.description}</p>
             </button>
           );
@@ -93,45 +95,53 @@ export function SignInForm({ nextPath }: { nextPath: string }) {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <input
-          value={fullName}
-          onChange={(event) => setFullName(event.target.value)}
-          className="w-full rounded-2xl border border-[var(--border)] bg-white px-4 py-3 outline-none transition focus:border-[var(--primary)]"
-          placeholder="Your full name"
-          autoComplete="name"
-        />
-        <input
-          value={phone}
-          onChange={(event) => setPhone(event.target.value)}
-          className="w-full rounded-2xl border border-[var(--border)] bg-white px-4 py-3 outline-none transition focus:border-[var(--primary)]"
-          placeholder="Phone number"
-          autoComplete="tel"
-        />
-        <input
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          className="w-full rounded-2xl border border-[var(--border)] bg-white px-4 py-3 outline-none transition focus:border-[var(--primary)] md:col-span-2"
-          placeholder="Email address"
-          autoComplete="email"
-        />
+        <label className="space-y-2">
+          <span className="eyebrow text-[var(--muted)]">Full name</span>
+          <input
+            value={fullName}
+            onChange={(event) => setFullName(event.target.value)}
+            className="w-full rounded-2xl border border-[var(--border)] bg-white px-4 py-3 outline-none transition focus:border-[var(--primary)]"
+            placeholder="Your full name"
+            autoComplete="name"
+          />
+        </label>
+        <label className="space-y-2">
+          <span className="eyebrow text-[var(--muted)]">Phone</span>
+          <input
+            value={phone}
+            onChange={(event) => setPhone(event.target.value)}
+            className="w-full rounded-2xl border border-[var(--border)] bg-white px-4 py-3 outline-none transition focus:border-[var(--primary)]"
+            placeholder="Phone number"
+            autoComplete="tel"
+          />
+        </label>
+        <label className="space-y-2 md:col-span-2">
+          <span className="eyebrow text-[var(--muted)]">Email</span>
+          <input
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            className="w-full rounded-2xl border border-[var(--border)] bg-white px-4 py-3 outline-none transition focus:border-[var(--primary)]"
+            placeholder="Email address"
+            autoComplete="email"
+          />
+        </label>
       </div>
 
       <div className="rounded-[24px] border border-[var(--border)] bg-[var(--surface-alt)] p-4 text-sm leading-6 text-[var(--muted)]">
-        <p className="font-semibold text-[var(--foreground)]">Prototype access mode</p>
+        <p className="font-semibold text-[var(--foreground)]">Workspace routing</p>
         <p className="mt-2">
-          This is a lightweight signed-session flow so we can keep building protected owner and admin pages without
-          introducing a paid auth provider yet.
+          The selected role decides which product surface opens first after sign-in.
         </p>
         <p className="mt-2">
           {canAccessAdmin(role)
-            ? "This role will open the operations dashboard after sign-in."
+            ? "This role opens the admin operations workspace with review, investigations, fees, and audit visibility."
             : canCreateListings(role)
-              ? "This role will open the owner workspace and listing draft flow after sign-in."
-              : "This role will open the buyer dashboard after sign-in."}
+              ? "This role opens the owner workspace, listing wizard, commissions, penalties, and inquiry tracking."
+              : "This role opens the buyer dashboard for unlock history, seeker requests, and pending payments."}
         </p>
         <p className="mt-2">
-          Repeated sign-in, unlock, and messaging attempts are temporarily throttled to protect the marketplace while
-          we harden the production auth and payment stack.
+          Sign-in, unlock, and messaging writes are rate-limited to protect the marketplace while the production auth
+          stack is finalized.
         </p>
       </div>
 
@@ -141,10 +151,10 @@ export function SignInForm({ nextPath }: { nextPath: string }) {
         type="submit"
         disabled={isPending}
         className={`w-full rounded-2xl px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-white transition ${
-          isPending ? "cursor-not-allowed bg-[rgba(26,77,46,0.45)]" : "bg-[var(--primary)] hover:bg-[var(--primary-light)]"
+          isPending ? "cursor-not-allowed bg-[rgba(0,104,74,0.45)]" : "bg-[var(--primary)] hover:bg-[var(--primary-light)] hover:text-[#00130d]"
         }`}
       >
-        {isPending ? "Starting session..." : "Continue"}
+        {isPending ? "Starting session..." : "Enter workspace"}
       </button>
     </form>
   );

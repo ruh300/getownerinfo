@@ -38,6 +38,7 @@ export function UnlockContactPanel({
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [unlocked, setUnlocked] = useState(initiallyUnlocked);
+  const [copiedField, setCopiedField] = useState<"phone" | "address" | null>(null);
 
   async function handleUnlock() {
     setMessage(null);
@@ -61,7 +62,11 @@ export function UnlockContactPanel({
 
       if (payload.unlocked) {
         setUnlocked(true);
-        setMessage(payload.reused ? "This listing was already unlocked in your account." : "Listing contact details unlocked for this account.");
+        setMessage(
+          payload.reused
+            ? "This listing was already unlocked in your account."
+            : "Listing contact details unlocked for this account.",
+        );
         router.refresh();
         return;
       }
@@ -80,77 +85,178 @@ export function UnlockContactPanel({
     }
   }
 
+  async function copyValue(field: "phone" | "address", value: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedField(field);
+      setMessage(field === "phone" ? "Owner phone copied to your clipboard." : "Exact address copied to your clipboard.");
+      window.setTimeout(() => {
+        setCopiedField((current) => (current === field ? null : current));
+      }, 1800);
+    } catch {
+      setError("Copy failed on this device. You can still select the text manually.");
+    }
+  }
+
   if (unlocked) {
     return (
-      <section className="rounded-[28px] border border-[rgba(26,122,74,0.24)] bg-[linear-gradient(180deg,#edfaf3,#f7fffb)] p-6 shadow-[0_20px_50px_rgba(26,122,74,0.12)]">
-        {paymentStatus === "paid" ? (
-          <div className="mb-4">
-            <PaymentReturnNotice status={paymentStatus} reference={paymentReference} subject="Listing contact unlock" />
-          </div>
-        ) : null}
-        <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary)]">Access unlocked</p>
-        <h2 className="mt-3 font-[var(--font-display)] text-3xl text-[var(--foreground)]">Direct owner details are now visible.</h2>
-        <div className="mt-5 space-y-3 rounded-[24px] border border-[rgba(26,122,74,0.18)] bg-white/80 p-4 text-sm leading-6 text-[var(--foreground)]">
-          <div className="flex items-center justify-between gap-3">
-            <span>Owner full name</span>
-            <span className="font-semibold">{ownerName}</span>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <span>Phone number</span>
-            <span className="font-semibold">{ownerPhone}</span>
-          </div>
-          <div className="flex items-start justify-between gap-3">
-            <span>Exact address</span>
-            <span className="max-w-[14rem] text-right font-semibold">{exactAddress}</span>
-          </div>
+      <section className="surface-card overflow-hidden">
+        <div className="bg-[linear-gradient(180deg,rgba(0,30,43,0.98),rgba(28,45,56,0.95))] px-6 py-6 text-[var(--dark-copy)]">
+          {paymentStatus === "paid" ? (
+            <div className="mb-4">
+              <PaymentReturnNotice status={paymentStatus} reference={paymentReference} subject="Listing contact unlock" />
+            </div>
+          ) : null}
+          <p className="eyebrow text-[var(--primary-light)]">Access unlocked</p>
+          <h2 className="mt-3 font-[var(--font-display)] text-3xl text-white">Direct owner details are now visible.</h2>
+          <p className="mt-3 text-sm leading-7 text-[rgba(232,237,235,0.8)]">
+            Contact details are tied to this buyer account and intended for a real follow-up, not public redistribution.
+          </p>
         </div>
-        <p className="mt-4 text-sm leading-6 text-[var(--muted)]">
-          Your unlock is now tied to a settled payment record, and the AfrIPay handoff uses the same payment reference and return path.
-        </p>
-        {message ? <div className="mt-4 rounded-2xl border border-[rgba(26,122,74,0.24)] bg-[rgba(26,122,74,0.08)] px-4 py-3 text-sm text-[var(--primary)]">{message}</div> : null}
+
+        <div className="space-y-4 px-6 py-6">
+          <div className="rounded-[1.35rem] border border-[var(--border)] bg-[var(--surface-alt)] px-4 py-4">
+            <p className="eyebrow text-[var(--muted)]">Owner</p>
+            <p className="mt-3 text-lg font-semibold text-[var(--foreground)]">{ownerName}</p>
+          </div>
+
+          <div className="rounded-[1.35rem] border border-[var(--border)] bg-[var(--surface-alt)] px-4 py-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="eyebrow text-[var(--muted)]">Phone number</p>
+                <p className="mt-3 text-lg font-semibold text-[var(--foreground)]">{ownerPhone}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <a
+                  href={`tel:${ownerPhone}`}
+                  className="pill-button pill-button-light min-h-0 px-3 py-2 text-xs"
+                >
+                  Call
+                </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void copyValue("phone", ownerPhone);
+                  }}
+                  className="pill-button pill-button-light min-h-0 px-3 py-2 text-xs"
+                >
+                  {copiedField === "phone" ? "Copied" : "Copy"}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-[1.35rem] border border-[var(--border)] bg-[var(--surface-alt)] px-4 py-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="eyebrow text-[var(--muted)]">Exact address</p>
+                <p className="mt-3 text-sm leading-7 text-[var(--foreground)]">{exactAddress}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  void copyValue("address", exactAddress);
+                }}
+                className="pill-button pill-button-light min-h-0 shrink-0 px-3 py-2 text-xs"
+              >
+                {copiedField === "address" ? "Copied" : "Copy"}
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-[1.25rem] border border-[rgba(0,237,100,0.2)] bg-[rgba(0,237,100,0.06)] px-4 py-4 text-sm leading-7 text-[var(--muted)]">
+            <p className="font-semibold text-[var(--foreground)]">Watermarked access</p>
+            <p className="mt-2">
+              This unlock is tied to your account and recorded in the audit trail. Sensitive identity documents remain
+              hidden even after payment.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <Link href="/dashboard" className="pill-button pill-button-light">
+              Buyer workspace
+            </Link>
+            <Link href={`/listings/${listingId}#availability-chat`} className="pill-button pill-button-light">
+              Ask follow-up
+            </Link>
+          </div>
+
+          {message ? (
+            <div className="rounded-[1.15rem] border border-[rgba(0,237,100,0.22)] bg-[rgba(0,237,100,0.06)] px-4 py-3 text-sm text-[var(--primary)]">
+              {message}
+            </div>
+          ) : null}
+          {error ? (
+            <div className="rounded-[1.15rem] border border-[rgba(240,68,68,0.22)] bg-[rgba(240,68,68,0.08)] px-4 py-3 text-sm text-[#b03030]">
+              {error}
+            </div>
+          ) : null}
+        </div>
       </section>
     );
   }
 
   return (
-    <section className="rounded-[28px] border border-[rgba(200,134,10,0.24)] bg-[linear-gradient(180deg,#fff8ec,#fff4db)] p-6 shadow-[0_20px_50px_rgba(200,134,10,0.12)]">
+    <section className="dark-card px-6 py-6">
       {paymentStatus ? (
         <div className="mb-4">
           <PaymentReturnNotice status={paymentStatus} reference={paymentReference} subject="Listing contact unlock" />
         </div>
       ) : null}
-      <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">Locked contact panel</p>
-      <h2 className="mt-3 font-[var(--font-display)] text-3xl text-[var(--foreground)]">Owner contact stays private until unlock.</h2>
-      <div className="mt-5 space-y-3 rounded-[24px] border border-[rgba(200,134,10,0.2)] bg-white/70 p-4 text-sm leading-6 text-[var(--muted)]">
+      <p className="eyebrow text-[var(--primary-light)]">Locked contact panel</p>
+      <h2 className="mt-3 font-[var(--font-display)] text-3xl text-white">
+        Owner contact stays private until unlock.
+      </h2>
+      <p className="mt-3 text-sm leading-7 text-[rgba(232,237,235,0.8)]">
+        Buyers can browse everything needed to decide, but direct phone numbers, exact addresses, and caretaker details
+        stay hidden until payment settles.
+      </p>
+
+      <div className="mt-5 space-y-3 rounded-[1.5rem] border border-[rgba(184,196,194,0.12)] bg-[rgba(255,255,255,0.04)] p-4 text-sm leading-6 text-[rgba(232,237,235,0.82)]">
         <div className="flex items-center justify-between gap-3">
           <span>Owner full name</span>
-          <span className="font-semibold tracking-[0.14em] text-[var(--accent)]">LOCKED</span>
+          <span className="font-[var(--font-code)] uppercase tracking-[0.22em] text-[rgba(232,237,235,0.58)] blur-[2px]">
+            verified owner
+          </span>
         </div>
         <div className="flex items-center justify-between gap-3">
           <span>Phone number</span>
-          <span className="font-semibold tracking-[0.14em] text-[var(--accent)]">LOCKED</span>
+          <span className="font-[var(--font-code)] uppercase tracking-[0.22em] text-[rgba(232,237,235,0.58)] blur-[2px]">
+            +250 xxx xxx xxx
+          </span>
         </div>
         <div className="flex items-center justify-between gap-3">
           <span>Exact address / UPI</span>
-          <span className="font-semibold tracking-[0.14em] text-[var(--accent)]">LOCKED</span>
+          <span className="font-[var(--font-code)] uppercase tracking-[0.22em] text-[rgba(232,237,235,0.58)] blur-[2px]">
+            street / map pin
+          </span>
         </div>
       </div>
-      <div className="mt-5 rounded-[24px] bg-white/70 p-4 text-sm leading-6 text-[var(--muted)]">
-        <p className="font-semibold text-[var(--foreground)]">What the token unlock will reveal</p>
+
+      <div className="mt-5 rounded-[1.5rem] border border-[rgba(184,196,194,0.12)] bg-[rgba(255,255,255,0.04)] p-4 text-sm leading-7 text-[rgba(232,237,235,0.82)]">
+        <p className="font-semibold text-white">What payment unlocks</p>
         <ul className="mt-3 space-y-2">
           <li>- Owner full name and direct phone number</li>
           <li>- Exact address details and map-ready location data</li>
           <li>- Any designated keys manager or caretaker contact</li>
         </ul>
+        <p className="mt-4 font-semibold text-white">What stays hidden</p>
+        <ul className="mt-3 space-y-2">
+          <li>- National ID and passport details</li>
+          <li>- Ownership proof and personal files</li>
+        </ul>
       </div>
+
       <div className="mt-5 flex flex-wrap gap-3">
         {signedIn ? (
           <button
             type="button"
-            onClick={() => { void handleUnlock(); }}
+            onClick={() => {
+              void handleUnlock();
+            }}
             disabled={isUnlocking}
-            className={`rounded-full px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-white transition ${
-              isUnlocking ? "cursor-not-allowed bg-[rgba(200,134,10,0.45)]" : "bg-[var(--accent)] hover:bg-[#a06b08]"
+            className={`pill-button ${
+              isUnlocking ? "cursor-not-allowed border border-[var(--dark-border)] bg-[var(--dark-border)] text-[rgba(232,237,235,0.66)]" : "pill-button-primary"
             }`}
           >
             {isUnlocking
@@ -160,25 +266,28 @@ export function UnlockContactPanel({
                 : "Unlock details"}
           </button>
         ) : (
-          <Link
-            href={`/sign-in?next=/listings/${listingId}`}
-            className="rounded-full bg-[var(--accent)] px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-[#a06b08]"
-          >
+          <Link href={`/sign-in?next=/listings/${listingId}`} className="pill-button pill-button-primary">
             Sign in to unlock
           </Link>
         )}
-        <Link
-          href="/dashboard"
-          className="rounded-full border border-[var(--accent)] px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--accent)] transition hover:bg-[rgba(200,134,10,0.08)]"
-        >
+        <Link href="/dashboard" className="pill-button pill-button-outline">
           Buyer workspace
         </Link>
       </div>
-      <p className="mt-4 text-sm leading-6 text-[var(--muted)]">
-        The payment flow now creates a pending checkout first, then reveals contact details only after the payment is confirmed.
+      <p className="mt-4 text-sm leading-7 text-[rgba(232,237,235,0.76)]">
+        18% VAT inclusive. Non-refundable. Contact visibility is granted only after the payment record moves to a
+        confirmed state.
       </p>
-      {message ? <div className="mt-4 rounded-2xl border border-[rgba(26,122,74,0.24)] bg-[rgba(26,122,74,0.08)] px-4 py-3 text-sm text-[var(--primary)]">{message}</div> : null}
-      {error ? <div className="mt-4 rounded-2xl border border-[rgba(184,50,50,0.2)] bg-[rgba(184,50,50,0.08)] px-4 py-3 text-sm text-[#9c2d2d]">{error}</div> : null}
+      {message ? (
+        <div className="mt-4 rounded-[1.15rem] border border-[rgba(0,237,100,0.22)] bg-[rgba(0,237,100,0.08)] px-4 py-3 text-sm text-[var(--primary-light)]">
+          {message}
+        </div>
+      ) : null}
+      {error ? (
+        <div className="mt-4 rounded-[1.15rem] border border-[rgba(240,68,68,0.22)] bg-[rgba(240,68,68,0.08)] px-4 py-3 text-sm text-[#ffb0b0]">
+          {error}
+        </div>
+      ) : null}
     </section>
   );
 }

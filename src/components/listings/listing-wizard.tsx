@@ -577,16 +577,17 @@ export function ListingWizard({
   ];
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-8 px-5 py-8 md:px-8 md:py-10">
+    <main className="page-shell mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-8 px-5 py-8 md:px-8 md:py-10">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="space-y-3">
           <Link href="/" className="inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.14em] text-[var(--primary-light)]">
             Back to Home
           </Link>
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">Listing Creation</p>
-          <h1 className="font-[var(--font-display)] text-4xl leading-tight md:text-5xl">Start a trust-first listing draft.</h1>
-          <p className="max-w-3xl text-base leading-7 text-[var(--muted)]">
-            This draft flow now supports pricing rules, browser autosave, listing image uploads, and an admin-only ownership proof upload.
+          <p className="eyebrow text-[var(--primary-light)]">Listing creation</p>
+          <h1 className="font-[var(--font-display)] text-4xl leading-tight text-white md:text-5xl">Start a trust-first listing draft.</h1>
+          <p className="max-w-3xl text-base leading-7 text-[var(--dark-copy)]">
+            Move from category selection to a review-ready draft with pricing guidance, autosave, media uploads, and
+            admin-only proof handling.
           </p>
           {isBlockedByPenalty ? (
             <div className="max-w-3xl rounded-[20px] border border-[rgba(184,50,50,0.2)] bg-[rgba(184,50,50,0.08)] px-4 py-3 text-sm leading-6 text-[#9c2d2d]">
@@ -600,14 +601,14 @@ export function ListingWizard({
               <span className="font-semibold">{formatRwf(commissionGuard.overdueAmountRwf)}</span>.
             </div>
           ) : null}
-          <div className="inline-flex rounded-full border border-[rgba(26,77,46,0.14)] bg-[var(--surface-alt)] px-4 py-2 text-sm font-medium text-[var(--primary)]">
+          <div className="inline-flex rounded-full border border-[rgba(184,196,194,0.18)] bg-[rgba(28,45,56,0.84)] px-4 py-2 text-sm font-medium text-[var(--primary-light)]">
             Signed in as {signedInUser.fullName} ({signedInUser.role})
           </div>
         </div>
-        <div className="rounded-[24px] border border-[rgba(26,77,46,0.14)] bg-[var(--surface)] px-5 py-4 shadow-[0_18px_40px_rgba(0,0,0,0.06)]">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Current recommendation</p>
+        <div className="hero-panel px-5 py-4 text-white">
+          <p className="eyebrow text-[var(--primary-light)]">Current recommendation</p>
           <p className="mt-2 font-[var(--font-display)] text-2xl text-[var(--primary)]">{summaryModel === "A" ? "Model A" : "Model B"}</p>
-          <p className="mt-1 max-w-xs text-sm leading-6 text-[var(--muted)]">
+          <p className="mt-1 max-w-xs text-sm leading-6 text-[rgba(232,237,235,0.78)]">
             {eligibility?.eligibleForModelA ? "This listing can choose between exclusive commission flow and pay-to-list." : "The current inputs keep the listing on the pay-to-list path."}
           </p>
         </div>

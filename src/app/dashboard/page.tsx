@@ -111,29 +111,30 @@ export default async function DashboardPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-7xl flex-col gap-8 px-5 py-8 md:px-8 md:py-10">
-      <section className="overflow-hidden rounded-[30px] border border-[var(--border)] bg-[var(--surface)] shadow-[0_24px_80px_rgba(0,0,0,0.08)]">
-        <div className="grid gap-8 px-6 py-8 md:grid-cols-[1.2fr_0.8fr] md:px-8 md:py-10">
+    <main className="page-shell mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-7xl flex-col gap-8 px-5 py-8 md:px-8 md:py-10">
+      <section className="hero-shell px-6 py-7 md:px-8 md:py-8">
+        <div className="grid gap-8 md:grid-cols-[1.2fr_0.8fr]">
           <div className="space-y-4">
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Signed workspace</p>
-            <h1 className="font-[var(--font-display)] text-4xl leading-tight md:text-5xl">
+            <p className="eyebrow text-[var(--primary-light)]">Protected workspace</p>
+            <h1 className="font-[var(--font-display)] text-4xl leading-tight text-white md:text-5xl">
               Welcome back, {session.user.fullName}.
             </h1>
-            <p className="max-w-3xl text-base leading-7 text-[var(--muted)]">
-              This dashboard is now protected by a signed session cookie and can branch cleanly between buyer, owner, manager, and admin experiences.
+            <p className="max-w-3xl text-base leading-8 text-[rgba(232,237,235,0.82)]">
+              This workspace changes with your role so buyers can track unlocks, owners can manage listings and deal
+              follow-up, and managers can step into operations without leaving the product shell.
             </p>
             <div className="flex flex-wrap gap-3">
               {canCreateListings(session.user.role) ? (
                 <>
                   <Link
                     href="/listings/new"
-                    className="rounded-full bg-[var(--primary)] px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-[var(--primary-light)]"
+                    className="pill-button pill-button-primary"
                   >
                     Start new listing
                   </Link>
                   <Link
                     href="/seeker-requests"
-                    className="rounded-full border border-[var(--accent)] px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--accent)] transition hover:bg-[rgba(200,134,10,0.08)]"
+                    className="pill-button pill-button-outline"
                   >
                     Explore seeker demand
                   </Link>
@@ -141,21 +142,21 @@ export default async function DashboardPage() {
               ) : (
                 <Link
                   href="/listings"
-                  className="rounded-full bg-[var(--primary)] px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-[var(--primary-light)]"
+                  className="pill-button pill-button-primary"
                 >
                   Browse listings
                 </Link>
               )}
               <Link
                 href="/api/status"
-                className="rounded-full border border-[var(--primary)] px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--primary)] transition hover:bg-[var(--surface-alt)]"
+                className="pill-button pill-button-outline"
               >
                 View system status
               </Link>
               {canAccessAdmin(session.user.role) ? (
                 <Link
                   href="/admin"
-                  className="rounded-full border border-[var(--accent)] px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--accent)] transition hover:bg-[rgba(200,134,10,0.08)]"
+                  className="pill-button pill-button-outline"
                 >
                   Open admin
                 </Link>
@@ -163,8 +164,8 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          <div className="rounded-[26px] border border-[rgba(26,77,46,0.12)] bg-[linear-gradient(180deg,rgba(26,77,46,0.98),rgba(20,92,56,1))] p-6 text-white">
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[rgba(255,255,255,0.72)]">Current session</p>
+          <div className="hero-panel p-6 text-white">
+            <p className="eyebrow text-[var(--primary-light)]">Current session</p>
             <dl className="mt-5 space-y-4 text-sm leading-6 text-[rgba(255,255,255,0.88)]">
               <div>
                 <dt className="text-[rgba(255,255,255,0.68)]">Role</dt>

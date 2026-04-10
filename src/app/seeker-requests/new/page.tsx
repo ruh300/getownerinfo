@@ -18,35 +18,30 @@ export default async function NewSeekerRequestPage({
   const paymentReference = getSingleSearchParam(resolvedSearchParams.paymentReference);
 
   return (
-    <main className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-6xl flex-col gap-8 px-5 py-8 md:px-8 md:py-10">
-      <section className="overflow-hidden rounded-[30px] border border-[var(--border)] bg-[var(--surface)] shadow-[0_24px_80px_rgba(0,0,0,0.08)]">
-        <div className="grid gap-8 px-6 py-8 md:grid-cols-[1.05fr_0.95fr] md:px-8 md:py-10">
-          <div className="space-y-4">
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Buyer request board</p>
+    <main className="page-shell mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-6xl flex-col gap-8 px-5 py-8 md:px-8 md:py-10">
+      <section className="hero-shell px-6 py-7 md:px-8 md:py-8">
+        <div className="grid gap-8 md:grid-cols-[1.05fr_0.95fr]">
+          <div className="space-y-4 text-white">
+            <p className="eyebrow text-[var(--primary-light)]">Buyer request board</p>
             <h1 className="font-[var(--font-display)] text-4xl leading-tight md:text-5xl">
               Post what you need and let the right owner come to you.
             </h1>
-            <p className="max-w-3xl text-base leading-7 text-[var(--muted)]">
-              Use seeker requests when the right listing is missing or buried. The public board stays anonymized, your contact details stay hidden, and the request only goes live after the posting payment settles.
+            <p className="max-w-3xl text-base leading-8 text-[rgba(232,237,235,0.82)]">
+              Use seeker requests when the right listing is missing or buried. The public board stays anonymized, your
+              contact details stay hidden, and the request only goes live after the posting payment settles.
             </p>
             <div className="flex flex-wrap gap-3">
-              <Link
-                href="/seeker-requests"
-                className="rounded-full border border-[var(--primary)] px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--primary)] transition hover:bg-[var(--surface-alt)]"
-              >
+              <Link href="/seeker-requests" className="pill-button pill-button-primary">
                 Browse seeker board
               </Link>
-              <Link
-                href="/dashboard"
-                className="rounded-full border border-[var(--accent)] px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--accent)] transition hover:bg-[rgba(200,134,10,0.08)]"
-              >
+              <Link href="/dashboard" className="pill-button pill-button-outline">
                 Back to dashboard
               </Link>
             </div>
           </div>
 
-          <div className="rounded-[26px] border border-[rgba(26,77,46,0.12)] bg-[linear-gradient(180deg,rgba(26,77,46,0.98),rgba(20,92,56,1))] p-6 text-white">
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[rgba(255,255,255,0.72)]">How it works</p>
+          <div className="hero-panel p-6 text-white">
+            <p className="eyebrow text-[var(--primary-light)]">How it works</p>
             <div className="mt-5 space-y-4 text-sm leading-6 text-[rgba(255,255,255,0.86)]">
               <div className="rounded-2xl border border-[rgba(255,255,255,0.14)] bg-[rgba(255,255,255,0.08)] p-4">
                 Owners see your category, budget range, location, and need summary.
@@ -63,7 +58,7 @@ export default async function NewSeekerRequestPage({
       </section>
 
       {paymentStatus ? (
-        <section className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_12px_32px_rgba(0,0,0,0.06)]">
+        <section className="surface-card p-4">
           <PaymentReturnNotice
             status={paymentStatus}
             reference={paymentReference}
@@ -81,7 +76,7 @@ export default async function NewSeekerRequestPage({
         </section>
       ) : null}
 
-      <section className="rounded-[30px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.08)] md:p-8">
+      <section className="surface-card p-6 md:p-8">
         <SeekerRequestForm feeSettings={feeSettings} />
       </section>
     </main>

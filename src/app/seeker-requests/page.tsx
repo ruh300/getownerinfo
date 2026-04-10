@@ -24,130 +24,135 @@ export default async function SeekerRequestsPage({
   });
 
   return (
-    <main className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-7xl flex-col gap-8 px-5 py-8 md:px-8 md:py-10">
-      <section className="overflow-hidden rounded-[30px] border border-[var(--border)] bg-[var(--surface)] shadow-[0_24px_80px_rgba(0,0,0,0.08)]">
-        <div className="grid gap-6 px-6 py-8 md:grid-cols-[1.1fr_0.9fr] md:px-8 md:py-10">
-          <div className="space-y-4">
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Anonymized demand board</p>
-            <h1 className="font-[var(--font-display)] text-4xl leading-tight md:text-5xl">
-              See what buyers and tenants are actively searching for.
+    <main className="page-shell mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-7xl flex-col gap-8 px-5 py-8 md:px-8 md:py-10">
+      <section className="hero-shell px-6 py-7 md:px-8 md:py-8">
+        <div className="grid gap-6 xl:grid-cols-[1.12fr_0.88fr]">
+          <div className="space-y-4 text-white">
+            <p className="eyebrow text-[var(--primary-light)]">Anonymized demand board</p>
+            <h1 className="font-[var(--font-display)] text-4xl leading-tight md:text-6xl">
+              See what serious buyers and tenants need right now.
             </h1>
-            <p className="max-w-3xl text-base leading-7 text-[var(--muted)]">
-              Seeker requests stay public but anonymized. Owners can study live demand by category, budget, and approximate location, then prototype-unlock seeker contact details from the request page when they are ready to follow up.
+            <p className="max-w-3xl text-base leading-8 text-[rgba(232,237,235,0.82)]">
+              Public seeker requests stay anonymous until an owner pays to unlock the requester contact. That keeps the
+              board useful without turning it into a cold-calling feed.
             </p>
-          </div>
-          <div className="rounded-[26px] border border-[rgba(26,77,46,0.12)] bg-[linear-gradient(180deg,rgba(26,77,46,0.98),rgba(20,92,56,1))] p-6 text-white">
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[rgba(255,255,255,0.72)]">Board status</p>
-            <h2 className="mt-3 font-[var(--font-display)] text-4xl">{requests.length}</h2>
-            <p className="mt-2 text-sm leading-6 text-[rgba(255,255,255,0.84)]">
-              Active seeker request{requests.length === 1 ? "" : "s"} currently visible on the marketplace board.
-            </p>
-            <div className="mt-5 flex flex-wrap gap-3">
-              <Link
-                href="/seeker-requests/new"
-                className="rounded-full bg-white px-4 py-2 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--primary)] transition hover:bg-[rgba(255,255,255,0.88)]"
-              >
+            <div className="flex flex-wrap gap-3">
+              <Link href="/seeker-requests/new" className="pill-button pill-button-primary">
                 Post request
               </Link>
-              <Link
-                href="/listings"
-                className="rounded-full border border-[rgba(255,255,255,0.24)] px-4 py-2 text-sm font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-[rgba(255,255,255,0.08)]"
-              >
+              <Link href="/listings" className="pill-button pill-button-outline">
                 Browse listings
               </Link>
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="hero-panel p-5 text-white">
+              <p className="eyebrow text-[rgba(232,237,235,0.62)]">Live demand</p>
+              <p className="mt-3 font-[var(--font-display)] text-4xl">{requests.length}</p>
+              <p className="mt-2 text-sm leading-6 text-[rgba(232,237,235,0.74)]">Active requests visible on the board.</p>
+            </div>
+            <div className="hero-panel p-5 text-white">
+              <p className="eyebrow text-[rgba(232,237,235,0.62)]">Search state</p>
+              <p className="mt-3 font-[var(--font-display)] text-4xl">{query ? "Live" : "Open"}</p>
+              <p className="mt-2 text-sm leading-6 text-[rgba(232,237,235,0.74)]">
+                {query ? `Searching for "${query}"` : "Search by title, area, or need"}
+              </p>
+            </div>
+            <div className="hero-panel p-5 text-white">
+              <p className="eyebrow text-[rgba(232,237,235,0.62)]">Access model</p>
+              <p className="mt-3 font-[var(--font-display)] text-4xl">Locked</p>
+              <p className="mt-2 text-sm leading-6 text-[rgba(232,237,235,0.74)]">
+                Requester identity appears only after owner-side unlock payment.
+              </p>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="rounded-[28px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_20px_50px_rgba(0,0,0,0.06)]">
-        <form className="grid gap-4 md:grid-cols-[1.2fr_0.8fr_auto]">
-          <input
-            name="q"
-            defaultValue={query}
-            className="w-full rounded-2xl border border-[var(--border)] bg-white px-4 py-3 outline-none transition focus:border-[var(--primary)]"
-            placeholder="Search by title, need, or area"
-          />
-          <select
-            name="category"
-            defaultValue={category}
-            className="w-full rounded-2xl border border-[var(--border)] bg-white px-4 py-3 outline-none transition focus:border-[var(--primary)]"
-          >
-            <option value="">All categories</option>
-            {listingCategories.map((item) => (
-              <option key={item} value={item}>
-                {getCategoryLabel(item)}
-              </option>
-            ))}
-          </select>
-          <button
-            type="submit"
-            className="rounded-2xl bg-[var(--primary)] px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-[var(--primary-light)]"
-          >
-            Search
-          </button>
+      <section className="surface-card px-6 py-6 md:px-8">
+        <form className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr_auto]">
+          <label className="space-y-2">
+            <span className="eyebrow text-[var(--muted)]">Search</span>
+            <input
+              name="q"
+              defaultValue={query}
+              className="w-full rounded-[1.15rem] border border-[var(--border)] bg-white px-4 py-3 text-[var(--foreground)] outline-none transition focus:border-[var(--primary)]"
+              placeholder="Search by title, need, or area"
+            />
+          </label>
+          <label className="space-y-2">
+            <span className="eyebrow text-[var(--muted)]">Category</span>
+            <select
+              name="category"
+              defaultValue={category}
+              className="w-full rounded-[1.15rem] border border-[var(--border)] bg-white px-4 py-3 text-[var(--foreground)] outline-none transition focus:border-[var(--primary)]"
+            >
+              <option value="">All categories</option>
+              {listingCategories.map((item) => (
+                <option key={item} value={item}>
+                  {getCategoryLabel(item)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="flex items-end">
+            <button type="submit" className="pill-button pill-button-primary w-full lg:w-auto">
+              Apply filters
+            </button>
+          </div>
         </form>
       </section>
 
       {requests.length === 0 ? (
-        <section className="rounded-[28px] border border-[var(--border)] bg-[var(--surface)] p-10 text-center shadow-[0_20px_50px_rgba(0,0,0,0.06)]">
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">No active requests yet</p>
-          <h2 className="mt-3 font-[var(--font-display)] text-3xl">Post the first seeker request to activate this board.</h2>
-          <p className="mx-auto mt-4 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-            Buyers can already publish anonymized demand with a prototype post-fee record. Once requests go live, owners can use this board to spot unmet demand.
+        <section className="surface-card px-6 py-10 text-center md:px-8">
+          <p className="eyebrow text-[var(--primary)]">No active requests</p>
+          <h2 className="mt-3 font-[var(--font-display)] text-4xl text-[var(--foreground)]">
+            The seeker board is waiting for its first live demand signal.
+          </h2>
+          <p className="mx-auto mt-3 max-w-2xl text-sm leading-7 text-[var(--muted)]">
+            Buyers can already publish anonymized demand with a posting payment. Once requests go live, owners can use
+            this board to spot what the market wants before matching inventory.
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
-            <Link
-              href="/seeker-requests/new"
-              className="rounded-full bg-[var(--primary)] px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-[var(--primary-light)]"
-            >
+            <Link href="/seeker-requests/new" className="pill-button pill-button-primary">
               Post request
             </Link>
-            <Link
-              href="/dashboard"
-              className="rounded-full border border-[var(--primary)] px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--primary)] transition hover:bg-[var(--surface-alt)]"
-            >
-              View dashboard
+            <Link href="/dashboard" className="pill-button pill-button-light">
+              Open dashboard
             </Link>
           </div>
         </section>
       ) : (
-        <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+        <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           {requests.map((request) => (
-            <article
-              key={request.id}
-              className="rounded-[28px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_18px_48px_rgba(0,0,0,0.08)]"
-            >
+            <article key={request.id} className="surface-card-muted p-5">
               <div className="flex flex-wrap gap-2">
-                <span className="rounded-full bg-[rgba(26,77,46,0.1)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--primary)]">
+                <span className="eyebrow rounded-full border border-[rgba(0,104,74,0.16)] bg-[rgba(0,237,100,0.08)] px-3 py-1 text-[var(--primary)]">
                   {getCategoryLabel(request.category)}
                 </span>
-                <span className="rounded-full border border-[var(--border)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                <span className="eyebrow rounded-full border border-[var(--border)] px-3 py-1 text-[var(--muted)]">
                   {request.durationDays} days
                 </span>
               </div>
-              <h2 className="mt-4 font-[var(--font-display)] text-3xl leading-tight">{request.title}</h2>
+              <h2 className="mt-4 font-[var(--font-display)] text-3xl leading-tight text-[var(--foreground)]">
+                {request.title}
+              </h2>
               <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
                 {request.quantityLabel} in {request.approximateAreaLabel}
                 {request.district ? `, ${request.district}` : ""}
               </p>
-              <div className="mt-5 rounded-[24px] border border-[var(--border)] bg-[var(--surface-alt)] px-4 py-3">
-                <p className="text-sm font-semibold uppercase tracking-[0.14em] text-[var(--primary-light)]">Budget range</p>
-                <p className="mt-2 font-[var(--font-display)] text-2xl">
+              <div className="mt-5 rounded-[1.35rem] border border-[var(--border)] bg-white px-4 py-3">
+                <p className="eyebrow text-[var(--muted)]">Budget range</p>
+                <p className="mt-2 font-[var(--font-display)] text-3xl text-[var(--foreground)]">
                   {formatRwf(request.budgetMinRwf)} - {formatRwf(request.budgetMaxRwf)}
                 </p>
               </div>
-              <div className="mt-4 flex items-center justify-between gap-3 text-sm leading-6 text-[var(--muted)]">
-                <p>Anonymous public request</p>
-                <p>View token {formatRwf(request.viewTokenFeeRwf)}</p>
+              <div className="mt-4 rounded-[1.2rem] border border-[rgba(0,108,250,0.12)] bg-[rgba(0,108,250,0.05)] px-4 py-3 text-sm leading-6 text-[var(--muted)]">
+                Owner view token: {formatRwf(request.viewTokenFeeRwf)}
               </div>
-              <p className="mt-4 text-sm leading-6 text-[var(--muted)]">
-                Expires {formatDate(request.expiresAt)}
-              </p>
-              <Link
-                href={`/seeker-requests/${request.id}`}
-                className="mt-4 inline-flex rounded-full border border-[var(--primary)] px-4 py-2 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--primary)] transition hover:bg-[var(--surface-alt)]"
-              >
+              <p className="mt-4 text-sm leading-6 text-[var(--muted)]">Expires {formatDate(request.expiresAt)}</p>
+              <Link href={`/seeker-requests/${request.id}`} className="pill-button pill-button-light mt-4 w-full">
                 Open request
               </Link>
             </article>

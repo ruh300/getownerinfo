@@ -152,26 +152,21 @@ export default async function AdminPage({
   }
 
   return (
-    <main className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-7xl flex-col gap-8 px-5 py-8 md:px-8 md:py-10">
-      <section className="rounded-[30px] border border-[rgba(26,77,46,0.14)] bg-[linear-gradient(180deg,rgba(26,77,46,0.98),rgba(20,92,56,1))] p-8 text-white shadow-[0_24px_80px_rgba(26,77,46,0.2)]">
-        <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[rgba(255,255,255,0.72)]">Admin workspace</p>
+    <main className="page-shell mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-7xl flex-col gap-8 px-5 py-8 md:px-8 md:py-10">
+      <section className="hero-shell p-8 text-white">
+        <p className="eyebrow text-[var(--primary-light)]">Admin workspace</p>
         <h1 className="mt-4 font-[var(--font-display)] text-4xl leading-tight md:text-5xl">
           Operations view for {session.user.role}.
         </h1>
-        <p className="mt-4 max-w-3xl text-base leading-7 text-[rgba(255,255,255,0.84)]">
-          This route is now protected separately from the general dashboard so we can keep review, approvals, and governance tools isolated from public or buyer-only flows.
+        <p className="mt-4 max-w-3xl text-base leading-8 text-[rgba(255,255,255,0.84)]">
+          Reviews, payment reconciliation, investigations, penalties, commissions, and fee controls all converge here
+          so the marketplace can operate with one consistent governance surface.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
-          <Link
-            href="/dashboard"
-            className="rounded-full bg-white px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--primary)] transition hover:bg-[rgba(255,255,255,0.9)]"
-          >
+          <Link href="/dashboard" className="pill-button pill-button-primary">
             Back to dashboard
           </Link>
-          <Link
-            href="/api/status"
-            className="rounded-full border border-[rgba(255,255,255,0.26)] px-5 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-[rgba(255,255,255,0.08)]"
-          >
+          <Link href="/api/status" className="pill-button pill-button-outline">
             Check integrations
           </Link>
         </div>

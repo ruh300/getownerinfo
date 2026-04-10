@@ -35,38 +35,83 @@ export default async function ListingDetailPage({
   const orderedMedia = [...listing.media].sort((left, right) => Number(right.isCover) - Number(left.isCover));
 
   return (
-    <main className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-7xl flex-col gap-8 px-5 py-8 md:px-8 md:py-10">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="space-y-3">
-          <Link
-            href="/listings"
-            className="inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.14em] text-[var(--primary-light)]"
-          >
-            Back to listings
-          </Link>
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
-            {getCategoryLabel(listing.category)}
-          </p>
-          <h1 className="font-[var(--font-display)] text-4xl leading-tight md:text-5xl">{listing.title}</h1>
-          <p className="max-w-3xl text-base leading-7 text-[var(--muted)]">
-            Approximate location: {listing.approximateAreaLabel}
-            {listing.district ? `, ${listing.district}` : ""}. Exact owner contact and full address stay locked until
-            the token unlock step.
-          </p>
+    <main className="page-shell mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-7xl flex-col gap-8 px-5 py-8 md:px-8 md:py-10">
+      <section className="hero-shell px-6 py-7 md:px-8 md:py-8">
+        <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+          <div className="space-y-4 text-white">
+            <Link href="/listings" className="eyebrow inline-flex text-[var(--primary-light)]">
+              Back to listings
+            </Link>
+            <div className="flex flex-wrap gap-2">
+              <span className="eyebrow rounded-full border border-[rgba(0,237,100,0.24)] bg-[rgba(0,237,100,0.08)] px-3 py-1 text-[var(--primary-light)]">
+                {getCategoryLabel(listing.category)}
+              </span>
+              <span className="eyebrow rounded-full border border-[rgba(0,108,250,0.2)] bg-[rgba(0,108,250,0.08)] px-3 py-1 text-[#8db8ff]">
+                Model {listing.model}
+              </span>
+              <span className="eyebrow rounded-full border border-[rgba(184,196,194,0.18)] bg-[rgba(255,255,255,0.04)] px-3 py-1 text-[rgba(232,237,235,0.74)]">
+                {listing.units} unit{listing.units === 1 ? "" : "s"}
+              </span>
+            </div>
+            <h1 className="max-w-4xl font-[var(--font-display)] text-4xl leading-tight md:text-6xl">{listing.title}</h1>
+            <p className="max-w-3xl text-base leading-8 text-[rgba(232,237,235,0.82)]">
+              Approximate area: {listing.approximateAreaLabel}
+              {listing.district ? `, ${listing.district}` : ""}. Exact address, direct phone number, and any caretaker
+              details stay protected until the unlock payment settles.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <div className="hero-panel px-4 py-3 text-white">
+                <p className="eyebrow text-[rgba(232,237,235,0.62)]">Asking price</p>
+                <p className="mt-2 font-[var(--font-display)] text-3xl">{formatRwf(listing.priceRwf)}</p>
+              </div>
+              <div className="hero-panel px-4 py-3 text-white">
+                <p className="eyebrow text-[rgba(232,237,235,0.62)]">Owner type</p>
+                <p className="mt-2 text-lg font-semibold">{humanizeEnum(listing.ownerType)}</p>
+              </div>
+              <div className="hero-panel px-4 py-3 text-white">
+                <p className="eyebrow text-[rgba(232,237,235,0.62)]">Token policy</p>
+                <p className="mt-2 text-lg font-semibold">
+                  {listing.tokenFeeEnabled && listing.tokenFeeRwf ? formatRwf(listing.tokenFeeRwf) : "Configured by platform"}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="hero-panel p-5 text-[var(--dark-copy)]">
+            <p className="eyebrow text-[var(--primary-light)]">Protected access</p>
+            <h2 className="mt-3 font-[var(--font-display)] text-3xl text-white">
+              Buyer unlocks happen only after payment confirmation.
+            </h2>
+            <div className="mt-5 space-y-3">
+              <div className="rounded-[1.25rem] border border-[rgba(184,196,194,0.12)] bg-[rgba(255,255,255,0.04)] px-4 py-3">
+                <p className="eyebrow text-[rgba(232,237,235,0.56)]">Before unlock</p>
+                <p className="mt-2 text-sm leading-6 text-[rgba(232,237,235,0.82)]">
+                  Buyers can review media, price, features, and ask availability-only questions.
+                </p>
+              </div>
+              <div className="rounded-[1.25rem] border border-[rgba(184,196,194,0.12)] bg-[rgba(255,255,255,0.04)] px-4 py-3">
+                <p className="eyebrow text-[rgba(232,237,235,0.56)]">After unlock</p>
+                <p className="mt-2 text-sm leading-6 text-[rgba(232,237,235,0.82)]">
+                  Owner name, direct phone, and exact address become visible for this buyer account only.
+                </p>
+              </div>
+              <div className="rounded-[1.25rem] border border-[rgba(184,196,194,0.12)] bg-[rgba(255,255,255,0.04)] px-4 py-3">
+                <p className="eyebrow text-[rgba(232,237,235,0.56)]">Never shown</p>
+                <p className="mt-2 text-sm leading-6 text-[rgba(232,237,235,0.82)]">
+                  National ID details and ownership proof stay admin-only even after payment.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="rounded-[24px] border border-[rgba(26,77,46,0.14)] bg-[var(--surface)] px-5 py-4 shadow-[0_18px_40px_rgba(0,0,0,0.06)]">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Asking price</p>
-          <p className="mt-2 font-[var(--font-display)] text-3xl text-[var(--primary)]">{formatRwf(listing.priceRwf)}</p>
-          <p className="mt-1 text-sm leading-6 text-[var(--muted)]">{listing.units} unit(s) / Model {listing.model}</p>
-        </div>
-      </div>
+      </section>
 
       <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
         <div className="space-y-6">
-          <section className="overflow-hidden rounded-[28px] border border-[var(--border)] bg-[var(--surface)] shadow-[0_20px_50px_rgba(0,0,0,0.06)]">
+          <section className="surface-card overflow-hidden">
             {orderedMedia[0] ? (
               <div
-                className="h-[420px] bg-[var(--surface-alt)] bg-cover bg-center"
+                className="h-[420px] bg-[var(--dark-surface-alt)] bg-cover bg-center"
                 style={{ backgroundImage: `url("${orderedMedia[0].url}")` }}
               />
             ) : (
@@ -81,25 +126,24 @@ export default async function ListingDetailPage({
               {orderedMedia.slice(1).map((item) => (
                 <div
                   key={item.assetId}
-                  className="h-48 rounded-[24px] border border-[var(--border)] bg-[var(--surface-alt)] bg-cover bg-center shadow-[0_12px_32px_rgba(0,0,0,0.06)]"
+                  className="surface-card-muted h-48 bg-[var(--dark-surface-alt)] bg-cover bg-center"
                   style={{ backgroundImage: `url("${item.url}")` }}
                 />
               ))}
             </section>
           ) : null}
 
-          <section className="rounded-[28px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_20px_50px_rgba(0,0,0,0.06)]">
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">
-              Listing overview
-            </p>
-            <div className="mt-4 space-y-4 text-base leading-7 text-[var(--muted)]">
+          <section className="surface-card px-6 py-6">
+            <p className="eyebrow text-[var(--primary)]">Listing overview</p>
+            <h2 className="mt-3 font-[var(--font-display)] text-4xl text-[var(--foreground)]">What buyers should know first.</h2>
+            <div className="mt-5 space-y-4 text-base leading-8 text-[var(--muted)]">
               <p>{listing.description}</p>
             </div>
           </section>
 
-          <section className="rounded-[28px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_20px_50px_rgba(0,0,0,0.06)]">
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Features</p>
-            <div className="mt-4 flex flex-wrap gap-3">
+          <section className="surface-card px-6 py-6">
+            <p className="eyebrow text-[var(--primary)]">Features</p>
+            <div className="mt-5 flex flex-wrap gap-3">
               {listing.features.length > 0 ? (
                 listing.features.map((feature) => (
                   <span
@@ -110,7 +154,7 @@ export default async function ListingDetailPage({
                   </span>
                 ))
               ) : (
-                <p className="text-sm leading-6 text-[var(--muted)]">No extra features were added for this listing.</p>
+                <p className="text-sm leading-7 text-[var(--muted)]">No extra features were added for this listing.</p>
               )}
             </div>
           </section>
@@ -136,14 +180,14 @@ export default async function ListingDetailPage({
             unlocked={unlocked}
           />
 
-          <section className="rounded-[28px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_20px_50px_rgba(0,0,0,0.06)]">
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--primary-light)]">Location preview</p>
-            <div className="mt-4 space-y-3 text-sm leading-6 text-[var(--muted)]">
+          <section className="dark-card px-6 py-6">
+            <p className="eyebrow text-[var(--primary-light)]">Location preview</p>
+            <div className="mt-5 space-y-3 text-sm leading-7 text-[rgba(232,237,235,0.82)]">
               <p>
                 Approximate area: {listing.approximateAreaLabel}
                 {listing.district ? `, ${listing.district}` : ""}
               </p>
-              <p>Exact street address remains hidden until the unlock payment settles.</p>
+              <p>Exact street address and UPI remain hidden until the unlock payment settles.</p>
               <p>Owner type: {humanizeEnum(listing.ownerType)}</p>
               <p>Last updated {formatDateTime(listing.updatedAt)}</p>
             </div>
